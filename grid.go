@@ -64,6 +64,15 @@ func igniteRandom(grid [][]Cell) {
 
 }
 
+
+func trySpread(i,j, rows, cols int, grid, newGrid [][]Cell){
+	if i >= 0 && i < rows && j >= 0 && j < cols && grid[i][j].State == NoFire {
+        if rand.Float64() < SpreadChance {
+            newGrid[i][j].State = Fire
+        }
+    }
+}
+
 func SpreadFires(grid [][]Cell) {
 	if len(grid) == 0 || len(grid[0]) == 0 {
 		fmt.Println("No active fires")
@@ -79,21 +88,13 @@ func SpreadFires(grid [][]Cell) {
 		copy(newGrid[i], grid[i])
 	}
 
-	// Declares directions to hold up, down, left and right
-	direction := [][2]int{{-1, 0}, {+1, 0}, {0, -1}, {0, +1}}
-
-
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
 			if grid[i][j].State == Fire {
-				for _, dirValue := range direction{
-					ni, nj := i+dirValue[0], j+dirValue[1] // ni is neighbours of i and nj is neighbours of j (up, down, left, right)
-					if ni >= 0 && ni < rows && nj >= 0 && nj < cols && grid[ni][nj].State == NoFire {
-						if rand.Float64() < SpreadChance {
-							newGrid[ni][nj].State = Fire
-						}
-					}
-				}
+				trySpread(i-1, j, rows, cols, grid, newGrid) // up
+                trySpread(i+1, j, rows, cols, grid, newGrid) // down
+                trySpread(i, j-1, rows, cols, grid, newGrid) // left
+                trySpread(i, j+1, rows, cols, grid, newGrid) // right
 			}
 		}
 	}
