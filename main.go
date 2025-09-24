@@ -1,17 +1,37 @@
 package main
 
 import (
-	"fmt"
-	"math/rand"
-	"time"
+    "fmt"
+    "time"
 )
 
+func printGrid(grid [][]Cell) {
+    for i := range grid {
+        for j := range grid[i] {
+            if grid[i][j].State == Fire {
+                fmt.Print("F")
+            } else {
+                fmt.Print(".")
+            }
+        }
+        fmt.Println()
+    }
+}
+
 func main() {
-	rand.Seed(time.Now().UnixNano())
+    grid := createGrid()
 
-	// Minimal console output that lists
-	fmt.Println("Hejhejdå")
+    steps := 50
+    for s := 0; s < steps; s++ {
+        igniteRandom(grid)
+        SpreadFires(grid)
 
+        fmt.Printf("Step %d\n", s)
+        printGrid(grid)
+        fmt.Println()
+
+        time.Sleep(150 * time.Millisecond)
+    }
 }
 
 /*
