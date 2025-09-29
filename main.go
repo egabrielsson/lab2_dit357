@@ -1,37 +1,37 @@
 package main
 
 import (
-    "fmt"
-    "time"
+	"fmt"
+	"time"
 )
 
 func printGrid(grid [][]Cell) {
-    for i := range grid {
-        for j := range grid[i] {
-            if grid[i][j].State == Fire {
-                fmt.Print("F")
-            } else {
-                fmt.Print(".")
-            }
-        }
-        fmt.Println()
-    }
+	for i := range grid {
+		for j := range grid[i] {
+			if grid[i][j].State == Fire {
+				fmt.Print("F")
+			} else {
+				fmt.Print(".")
+			}
+		}
+		fmt.Println()
+	}
 }
 
 func main() {
-    grid := createGrid()
+	grid := createGrid()
 
-    steps := 50
-    for s := 0; s < steps; s++ {
-        igniteRandom(grid)
-        SpreadFires(grid)
+	steps := 50
+	for s := 0; s < steps; s++ {
+		igniteRandom(grid)
+		SpreadFires(grid)
 
-        fmt.Printf("Step %d\n", s)
-        printGrid(grid)
-        fmt.Println()
+		fmt.Printf("Step %d\n", s)
+		printGrid(grid)
+		fmt.Println()
 
-        time.Sleep(150 * time.Millisecond)
-    }
+		time.Sleep(150 * time.Millisecond)
+	}
 }
 
 /*

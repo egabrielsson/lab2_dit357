@@ -5,25 +5,26 @@ import (
 )
 
 type Firetruck struct {
-	row   int
-	col   int
-	water int
+	row, col int
+	water    int
+
+	destRow int
+	destCol int
+	enRoute bool
 }
 
 var trucks []Firetruck
 
-func createFireTruck(row, cal int) {
-	truck := Firetruck{row: row, col: cal, water: 0}
+func createFireTruck(row, col int) int {
+	truck := Firetruck{row: row, col: col, water: 0, destRow: row, destCol: col, enRoute: false}
 	trucks = append(trucks, truck)
-
+	return len(trucks) - 1
 }
 
 func extinguishFire(index int) {
 	t := &trucks[index]
-
 	if t.water > 20 {
 		fmt.Println("putout the fire")
-
 	} else {
 		fmt.Println("not enough water")
 	}
@@ -36,21 +37,45 @@ func requestWater(index int, amount int) {
 }
 
 func moveTruck(index int, direction string) {
+	t := &trucks[index]
+	switch direction {
+	case "north":
+		t.row--
+	case "south":
+		t.row++
+	case "west":
+		t.col--
+	case "east":
+		t.col++
+	}
+}
 
+func driveToFire(index int, fireRow, fireCol int) bool {
 	t := &trucks[index]
 
-	switch direction {
+	if !t.enRoute || t.destRow != fireRow || t.destCol != fireCol {
+		t.destRow, t.destCol = fireRow, fireCol
+		t.enRoute = true
+	}
 
-	case "north":
+	if t.row == t.destRow && t.col == t.destCol {
+		t.enRoute = false
+		return true
+	}
+
+	if t.row < t.destRow {
 		t.row++
-
-	case "south":
+	} else if t.row > t.destRow {
 		t.row--
-
-	case "West":
+	} else if t.col < t.destCol {
 		t.col++
-
-	case "East":
+	} else if t.col > t.destCol {
 		t.col--
 	}
+
+	if t.row == t.destRow && t.col == t.destCol {
+		t.enRoute = false
+		return true
+	}
+	return false
 }
