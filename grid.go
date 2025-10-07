@@ -1,106 +1,124 @@
 package main
 
 import (
-	"math/rand"
-	"time"
 	"fmt"
+	"math/rand"
 )
 
 const (
-	GridSize    = 20   // The set gridsize
-	FireChance  = 0.01 // Chance of a fire starting
-	SpreadChance = 0.05  // Chance of the fire spreading
+	GridSize      = 20
+	FireChance    = 0.02
+	SpreadChance  = 0.10
+	GrowthPerTick = 1
 )
 
-// Defines Cellstate as int
 type CellState int
 
-// Creates constants for Cellstate with iota
-// Which sets Empty to 0, Fire 1
 const (
-	NoFire CellState = iota
+	Empty CellState = iota
 	Fire
+	Extinguished
 )
 
-// Defines Cell as a Struct that holds
-// State of the Cell
 type Cell struct {
-	State CellState
-}
-// This is a function that randomizes the seed so that the outcome
-// Of the fire starting and spreading is different each time you run
-// the program.
-func init(){
-	rand.Seed(time.Now().UnixNano())
+	State     CellState
+	Intensity int
 }
 
-// Creates the grid without taking in parameters
-// Which always creates the GridSize at the set value of
-// 20. It then returns a grid that has all the values
-// assigned to 0.
 func createGrid() [][]Cell {
-	rows := GridSize
-	cols := GridSize
-
-	grid := make([][]Cell, rows)
-
-	for i := range grid {
-		grid[i] = make([]Cell, cols)
+	g := make([][]Cell, GridSize)
+	for i := range g {
+		g[i] = make([]Cell, GridSize)
 	}
-	return grid
+	return g
 }
 
-// This function takes a grid and loops trough it
-// At each place in the grid it
-func igniteRandom(grid [][]Cell) {
-	for i := range grid {
-		for j := range grid[i] {
-			if grid[i][j].State == NoFire && rand.Float64() < FireChance {
-				grid[i][j].State = Fire
-			}
-
+// igniteRandom may ignite a random empty cell with a new fire.
+func igniteRandom(g [][]Cell, chance float64) {
+	if rand.Float64() < chance {
+		r := rand.Intn(GridSize)
+		c := rand.Intn(GridSize)
+		if g[r][c].State == Empty {
+			g[r][c] = Cell{State: Fire, Intensity: 1}
 		}
 	}
-
 }
 
-
-func trySpread(i,j, rows, cols int, grid, newGrid [][]Cell){
-	if i >= 0 && i < rows && j >= 0 && j < cols && grid[i][j].State == NoFire {
-        if rand.Float64() < SpreadChance {
-            newGrid[i][j].State = Fire
-        }
-    }
+// stepFires advances the fire dynamics by one tick: fires grow and may spread.
+func stepFires(g [][]Cell) {
+	ng := createGrid()
+	for r := 0; r < GridSize; r++ {
+		for c := 0; c < GridSize; c++ {
+			ng[r][c] = g[r][c]
+			switch g[r][c].State {
+			case Fire:
+				ng[r][c].Intensity += GrowthPerTick
+				trySpread(g, ng, r-1, c)
+				trySpread(g, ng, r+1, c)
+				trySpread(g, ng, r, c-1)
+				trySpread(g, ng, r, c+1)
+			case Extinguished:
+				// stays extinguished
+			case Empty:
+				// nothing
+			}
+		}
+	}
+	for r := range g {
+		copy(g[r], ng[r])
+	}
 }
 
-func SpreadFires(grid [][]Cell) {
-	if len(grid) == 0 || len(grid[0]) == 0 {
-		fmt.Println("No active fires")
+func inBounds(r, c int) bool { return r >= 0 && r < GridSize && c >= 0 && c < GridSize }
+
+func trySpread(g, ng [][]Cell, r, c int) {
+	if !inBounds(r, c) {
 		return
 	}
-	rows, cols := len(grid), len(grid[0])
-
-	// Makes a copy of the currect state so that newly ignited
-	// Cells won't spread in the same step (exponentially)
-	newGrid := make([][]Cell, rows)
-	for i := range newGrid{
-		newGrid[i] = make([]Cell, cols)
-		copy(newGrid[i], grid[i])
+	if g[r][c].State == Empty && rand.Float64() < SpreadChance {
+		ng[r][c] = Cell{State: Fire, Intensity: 1}
 	}
+}
 
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if grid[i][j].State == Fire {
-				trySpread(i-1, j, rows, cols, grid, newGrid) // up
-                trySpread(i+1, j, rows, cols, grid, newGrid) // down
-                trySpread(i, j-1, rows, cols, grid, newGrid) // left
-                trySpread(i, j+1, rows, cols, grid, newGrid) // right
+// extinguish applies up to `water` units to the cell at (r,c).
+// Returns how much water was actually used.
+func extinguish(g [][]Cell, r, c, water int) int {
+	if !inBounds(r, c) || g[r][c].State != Fire || water <= 0 {
+		return 0
+	}
+	used := water
+	if g[r][c].Intensity < used {
+		used = g[r][c].Intensity
+	}
+	g[r][c].Intensity -= used
+	if g[r][c].Intensity <= 0 {
+		g[r][c].Intensity = 0
+		g[r][c].State = Extinguished
+	}
+	return used
+}
+
+// printGrid shows a compact view: . empty, F fire, E extinguished, T truck.
+func printGrid(g [][]Cell, trucks []Firetruck) {
+	overlay := map[[2]int]string{}
+	for _, t := range trucks {
+		overlay[[2]int{t.Row, t.Col}] = "T"
+	}
+	for r := 0; r < GridSize; r++ {
+		for c := 0; c < GridSize; c++ {
+			if v, ok := overlay[[2]int{r, c}]; ok {
+				fmt.Print(v)
+				continue
+			}
+			switch g[r][c].State {
+			case Empty:
+				fmt.Print(".")
+			case Fire:
+				fmt.Print("F")
+			case Extinguished:
+				fmt.Print("E")
 			}
 		}
+		fmt.Println()
 	}
-
-	for i := range grid {
-		copy(grid[i], newGrid[i])
-	}
-
 }

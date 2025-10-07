@@ -2,80 +2,82 @@ package main
 
 import (
 	"fmt"
+	"math"
 )
 
 type Firetruck struct {
-	row, col int
-	water    int
-
-	destRow int
-	destCol int
-	enRoute bool
+	ID       string
+	Row, Col int
+	Water    int
+	MaxWater int
+	Clock    *LamportClock
 }
 
-var trucks []Firetruck
-
-func createFireTruck(row, col int) int {
-	truck := Firetruck{row: row, col: col, water: 0, destRow: row, destCol: col, enRoute: false}
-	trucks = append(trucks, truck)
-	return len(trucks) - 1
-}
-
-func extinguishFire(index int) {
-	t := &trucks[index]
-	if t.water > 20 {
-		fmt.Println("putout the fire")
-	} else {
-		fmt.Println("not enough water")
+func NewFiretruck(id string, r, c int) Firetruck {
+	return Firetruck{
+		ID:       id,
+		Row:      r,
+		Col:      c,
+		Water:    50,
+		MaxWater: 100,
+		Clock:    &LamportClock{},
 	}
 }
 
-func requestWater(index int, amount int) {
-	t := &trucks[index]
-	t.water += amount
-	fmt.Println("Truck ", index, " Is now:", t.water)
+func (t *Firetruck) logf(format string, a ...any) {
+	lt := t.Clock.Tick()
+	prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
+	fmt.Println(prefix + fmt.Sprintf(format, a...))
 }
 
-func moveTruck(index int, direction string) {
-	t := &trucks[index]
-	switch direction {
-	case "north":
-		t.row--
-	case "south":
-		t.row++
-	case "west":
-		t.col--
-	case "east":
-		t.col++
+func (t *Firetruck) MoveToward(targetR, targetC int) {
+	dr := int(math.Copysign(1, float64(targetR-t.Row)))
+	if targetR == t.Row {
+		dr = 0
 	}
+	dc := int(math.Copysign(1, float64(targetC-t.Col)))
+	if targetC == t.Col {
+		dc = 0
+	}
+	// prefer vertical if far away vertically
+	if abs(targetR-t.Row) >= abs(targetC-t.Col) && dr != 0 {
+		t.Row += dr
+	} else if dc != 0 {
+		t.Col += dc
+	}
+	t.logf("move to (%d,%d)", t.Row, t.Col)
 }
 
-func driveToFire(index int, fireRow, fireCol int) bool {
-	t := &trucks[index]
+func (t *Firetruck) OnFireCell(g [][]Cell) bool {
+	return inBounds(t.Row, t.Col) && g[t.Row][t.Col].State == Fire
+}
 
-	if !t.enRoute || t.destRow != fireRow || t.destCol != fireCol {
-		t.destRow, t.destCol = fireRow, fireCol
-		t.enRoute = true
+func (t *Firetruck) Extinguish(g [][]Cell) {
+	if !t.OnFireCell(g) {
+		return
 	}
+	if t.Water <= 0 {
+		t.logf("no water to extinguish")
+		return
+	}
+	used := extinguish(g, t.Row, t.Col, t.Water)
+	t.Water -= used
+	t.logf("extinguish used=%d remaining=%d", used, t.Water)
+}
 
-	if t.row == t.destRow && t.col == t.destCol {
-		t.enRoute = false
-		return true
+func (t *Firetruck) Refill(tank *WaterTank) {
+	if t.Water >= t.MaxWater {
+		return
 	}
+	need := t.MaxWater - t.Water
+	got := tank.Withdraw(need)
+	t.Water += got
+	t.logf("refill got=%d new=%d", got, t.Water)
+}
 
-	if t.row < t.destRow {
-		t.row++
-	} else if t.row > t.destRow {
-		t.row--
-	} else if t.col < t.destCol {
-		t.col++
-	} else if t.col > t.destCol {
-		t.col--
+func abs(x int) int {
+	if x < 0 {
+		return -x
 	}
-
-	if t.row == t.destRow && t.col == t.destCol {
-		t.enRoute = false
-		return true
-	}
-	return false
+	return x
 }

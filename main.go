@@ -1,47 +1,63 @@
+// main.go
 package main
 
 import (
+	"flag"
 	"fmt"
+	"math/rand"
 	"time"
 )
 
-func printGrid(grid [][]Cell) {
-	for i := range grid {
-		for j := range grid[i] {
-			if grid[i][j].State == Fire {
-				fmt.Print("F")
-			} else {
-				fmt.Print(".")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	steps := flag.Int("steps", 50, "simulation steps")
+	flag.Parse()
+
+	// Grid & trucks
+	grid := createGrid()
+	trucks := []Firetruck{
+		NewFiretruck("T1", 0, 0),
+		NewFiretruck("T2", GridSize-1, GridSize-1),
+	}
+	tank := NewWaterTank(500)
+
+	for step := 1; step <= *steps; step++ {
+		fmt.Printf("\nStep %d\n", step)
+
+		igniteRandom(grid, FireChance)
+		stepFires(grid)
+
+		// simple policy: each truck moves toward the first fire found; if on fire, extinguish; if water low, refill.
+		fireR, fireC, found := findFirstFire(grid)
+		for i := range trucks {
+			t := &trucks[i]
+			if t.Water < 10 {
+				t.Refill(tank)
+			}
+			if found {
+				if t.Row == fireR && t.Col == fireC {
+					t.Extinguish(grid)
+				} else {
+					t.MoveToward(fireR, fireC)
+					if t.OnFireCell(grid) {
+						t.Extinguish(grid)
+					}
+				}
 			}
 		}
-		fmt.Println()
+
+		printGrid(grid, trucks)
 	}
 }
 
-func main() {
-	grid := createGrid()
-
-	steps := 50
-	for s := 0; s < steps; s++ {
-		igniteRandom(grid)
-		SpreadFires(grid)
-
-		fmt.Printf("Step %d\n", s)
-		printGrid(grid)
-		fmt.Println()
-
-		time.Sleep(150 * time.Millisecond)
+func findFirstFire(g [][]Cell) (int, int, bool) {
+	for r := 0; r < GridSize; r++ {
+		for c := 0; c < GridSize; c++ {
+			if g[r][c].State == Fire {
+				return r, c, true
+			}
+		}
 	}
+	return 0, 0, false
 }
-
-/*
-a) Implement a grid (e.g., 20×20) where fires can randomly ignite at different locations
-and spread over time if not extinguished.
-b) Implement basic firetruck agents that can move around the grid (north, south, east,
-west), request water, and extinguish fire.
-c) Define simple rules for fire dynamics: e.g., each timestep, a fire grows in intensity if
-not attended; extinguishing requires water proportional to intensity.
-d) Provide a minimal console output that lists / shows grid state (fires, firetrucks,
-extinguished cells).
-
-*/
