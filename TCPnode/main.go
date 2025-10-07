@@ -1,4 +1,3 @@
-// trucknode.go
 package main
 
 import (
