@@ -22,6 +22,12 @@ type Transport interface {
 	// The handler should return a reply message if one is needed
 	Listen(handler func(message.Message) (*message.Message, error)) error
 
+	// Publish broadcasts a message to all subscribers of a channel
+	Publish(channel string, msg message.Message) error
+
+	// Subscribe starts listening to broadcast messages on a channel
+	Subscribe(channel string, handler func(message.Message) error) error
+
 	// Close shuts down the transport
 	Close() error
 }
@@ -29,3 +35,15 @@ type Transport interface {
 // MessageHandler is a function that processes incoming messages.
 // It should return a reply message if one is needed, or nil for no reply.
 type MessageHandler func(message.Message) (*message.Message, error)
+
+// SubscriptionHandler is a function that processes broadcast messages.
+// No reply is expected for broadcast messages.
+type SubscriptionHandler func(message.Message) error
+
+// Common broadcast channels for coordination
+const (
+	ChannelFireAlerts    = "fires.alerts"
+	ChannelTruckStatus   = "trucks.status"
+	ChannelWaterRequests = "water.requests"
+	ChannelCoordination  = "coordination"
+)

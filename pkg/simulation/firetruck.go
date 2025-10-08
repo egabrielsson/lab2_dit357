@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"Firetruck-sim/pkg/clock"
+	"Firetruck-sim/pkg/message"
 	"Firetruck-sim/pkg/transport"
 )
 
@@ -16,6 +17,7 @@ type Firetruck struct {
 	MaxWater  int
 	Clock     *clock.LamportClock
 	Transport transport.Transport
+	Task      string // current task description
 }
 
 // NewFiretruck creates a new firetruck at the given position
@@ -27,6 +29,7 @@ func NewFiretruck(id string, r, c int) *Firetruck {
 		Water:    50,
 		MaxWater: 100,
 		Clock:    clock.NewLamportClock(),
+		Task:     "idle",
 	}
 }
 
@@ -44,6 +47,8 @@ func (t *Firetruck) logf(format string, a ...interface{}) {
 
 // MoveToward moves the firetruck one step toward the target coordinates
 func (t *Firetruck) MoveToward(targetR, targetC int) {
+	oldRow, oldCol := t.Row, t.Col
+	
 	dr := int(math.Copysign(1, float64(targetR-t.Row)))
 	if targetR == t.Row {
 		dr = 0
@@ -58,6 +63,15 @@ func (t *Firetruck) MoveToward(targetR, targetC int) {
 	} else if dc != 0 {
 		t.Col += dc
 	}
+	
+	// Announce movement intention if transport is available and we actually moved
+	if t.Transport != nil && (oldRow != t.Row || oldCol != t.Col) {
+		t.AnnounceIntention("moving", targetR, targetC, map[string]interface{}{
+			"from_row": oldRow,
+			"from_col": oldCol,
+		})
+	}
+	
 	t.logf("move to (%d,%d)", t.Row, t.Col)
 }
 
@@ -76,8 +90,20 @@ func (t *Firetruck) Extinguish(grid *Grid) {
 		t.logf("no water to extinguish")
 		return
 	}
+	
+	// Get fire intensity before extinguishing
+	cell := grid.GetCell(t.Row, t.Col)
+	fireIntensity := cell.Intensity
+	
 	used := grid.Extinguish(t.Row, t.Col, t.Water)
 	t.Water -= used
+	
+	// Broadcast fire alert if we discovered a new fire
+	if t.Transport != nil && fireIntensity > 0 {
+		t.BroadcastFireAlert(t.Row, t.Col, fireIntensity)
+	}
+	
+	t.SetTask("extinguishing")
 	t.logf("extinguish used=%d remaining=%d", used, t.Water)
 }
 
@@ -100,6 +126,67 @@ func (t *Firetruck) GetPosition() (int, int) {
 // GetWater returns the current water level
 func (t *Firetruck) GetWater() int {
 	return t.Water
+}
+
+// SetTask sets the current task and broadcasts status if transport is available
+func (t *Firetruck) SetTask(task string) {
+	t.Task = task
+	t.BroadcastStatus()
+}
+
+// BroadcastFireAlert sends a fire alert to all trucks
+func (t *Firetruck) BroadcastFireAlert(row, col, intensity int) {
+	if t.Transport == nil {
+		return
+	}
+	
+	msg := message.NewMessage(
+		message.TypeFireAlert,
+		t.ID,
+		message.FireAlertPayload(row, col, intensity),
+	)
+	
+	if err := t.Transport.Publish(transport.ChannelFireAlerts, msg); err != nil {
+		t.logf("failed to broadcast fire alert: %v", err)
+	} else {
+		t.logf("broadcast fire alert at (%d,%d) intensity=%d", row, col, intensity)
+	}
+}
+
+// BroadcastStatus sends current status to all trucks
+func (t *Firetruck) BroadcastStatus() {
+	if t.Transport == nil {
+		return
+	}
+	
+	msg := message.NewMessage(
+		message.TypeTruckStatus,
+		t.ID,
+		message.TruckStatusPayload(t.Row, t.Col, t.Water, t.MaxWater, t.Task),
+	)
+	
+	if err := t.Transport.Publish(transport.ChannelTruckStatus, msg); err != nil {
+		t.logf("failed to broadcast status: %v", err)
+	}
+}
+
+// AnnounceIntention broadcasts coordination message about planned action
+func (t *Firetruck) AnnounceIntention(action string, targetRow, targetCol int, details map[string]interface{}) {
+	if t.Transport == nil {
+		return
+	}
+	
+	msg := message.NewMessage(
+		message.TypeCoordination,
+		t.ID,
+		message.CoordinationPayload(action, targetRow, targetCol, details),
+	)
+	
+	if err := t.Transport.Publish(transport.ChannelCoordination, msg); err != nil {
+		t.logf("failed to announce intention: %v", err)
+	} else {
+		t.logf("announced intention: %s to (%d,%d)", action, targetRow, targetCol)
+	}
 }
 
 // abs returns the absolute value of an integer

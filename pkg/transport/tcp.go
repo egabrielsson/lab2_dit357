@@ -160,6 +160,16 @@ func (tt *TCPTransport) Request(toID string, msg message.Message, timeout time.D
 	return reply, nil
 }
 
+// Publish is not implemented for TCP transport (use NATS for pub-sub).
+func (tt *TCPTransport) Publish(channel string, msg message.Message) error {
+	return fmt.Errorf("publish not supported by TCP transport - use NATS for pub-sub")
+}
+
+// Subscribe is not implemented for TCP transport (use NATS for pub-sub).
+func (tt *TCPTransport) Subscribe(channel string, handler func(message.Message) error) error {
+	return fmt.Errorf("subscribe not supported by TCP transport - use NATS for pub-sub")
+}
+
 // Close shuts down the TCP transport.
 func (tt *TCPTransport) Close() error {
 	if tt.listener != nil {
