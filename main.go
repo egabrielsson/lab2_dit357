@@ -5,19 +5,22 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"Firetruck-sim/pkg/simulation"
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	steps := flag.Int("steps", 50, "simulation steps")
 	flag.Parse()
 
-	fmt.Printf("Running legacy simulation for %d steps\n", *steps)
-	fmt.Println("For the new modular version, use: go run cmd/simulate/main.go")
+	fmt.Printf("Running fire simulation for %d steps\n", *steps)
 	fmt.Println()
 
-	// Create simple simulation
+	// Create simulation with proper random seed
 	sim := simulation.NewSimulator(2, 500)
 	sim.Run(*steps)
 }

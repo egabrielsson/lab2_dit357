@@ -3,11 +3,17 @@ package simulation
 import (
 	"fmt"
 	"math/rand"
+	"time"
 )
+
+// Initialize random seed when package is loaded
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 const (
 	GridSize      = 20
-	FireChance    = 0.02
+	FireChance    = 0.08  // Good balance for demonstration
 	SpreadChance  = 0.10
 	GrowthPerTick = 1
 )

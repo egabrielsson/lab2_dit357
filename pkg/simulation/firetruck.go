@@ -1,7 +1,6 @@
 package simulation
 
 import (
-	"fmt"
 	"math"
 
 	"Firetruck-sim/pkg/clock"
@@ -38,11 +37,13 @@ func (t *Firetruck) SetTransport(transport transport.Transport) {
 	t.Transport = transport
 }
 
-// logf logs a message with Lamport timestamp
+// logf logs a message with Lamport timestamp (disabled for clean simulation output)
 func (t *Firetruck) logf(format string, a ...interface{}) {
+	// Uncomment for debugging:
 	lt := t.Clock.Tick()
-	prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
-	fmt.Println(prefix + fmt.Sprintf(format, a...))
+	_ = lt // prevent unused variable warning
+	// prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
+	// fmt.Println(prefix + fmt.Sprintf(format, a...))
 }
 
 // MoveToward moves the firetruck one step toward the target coordinates
