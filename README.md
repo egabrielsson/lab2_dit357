@@ -6,23 +6,9 @@
 go run cmd/simulate/main.go --steps 20
 ```
 
-## TCP sockets
-
-Terminal 1:
-
-```
-go run cmd/tcp-node/main.go --id T1 --addr :9001 --auto-offer
-```
-
-Terminal 2:
-
-```
-go run cmd/tcp-node/main.go --id T2 --addr :9002 --peers :9001@T1 --request --amount 30
-```
-
 ## NATS request-reply
 
-Terminal 1:
+T3. If still tied, lowest ID wins:
 
 ```
 docker run -p 4222:4222 nats:latest
@@ -63,9 +49,6 @@ go run cmd/nats-node/main.go --id T2 --pubsub
 Terminal 4:
 
 ```
-Terminal 4:
-
-```
 go run cmd/nats-node/main.go --id T3 --fire-alert
 ```
 
@@ -76,37 +59,53 @@ Demonstrates distributed decision-making where trucks bid for fires based on dis
 Terminal 1 - NATS server:
 
 ```
+
 docker run -p 4222:4222 nats:latest
+
 ```
 
 Terminal 2 - Coordinator (evaluates bids):
 
 ```
+
 go run cmd/nats-node/main.go --id FireCentral --coordinator
+
 ```
 
 Terminal 3 - Truck T1:
 
 ```
+
 go run cmd/nats-node/main.go --id T1 --bidding
+
 ```
 
 Terminal 4 - Truck T2:
 
 ```
+
 go run cmd/nats-node/main.go --id T2 --bidding
+
 ```
 
 Terminal 5 - Trigger fire alert:
 
 ```
+
 go run cmd/nats-node/main.go --id FireStation --fire-alert
+
 ```
 
 Both T1 and T2 bid. FireCentral evaluates and announces winner:
+
 1. Closest distance wins
-2. If tied, most water wins  
+2. If tied, most water wins
 3. If still tied, lowest ID wins
 
-````
+```
+
+```
+
+```
+
 ```
