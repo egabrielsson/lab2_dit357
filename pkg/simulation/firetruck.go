@@ -263,10 +263,15 @@ func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
 	return winner, reason
 }
 
-// abs returns the absolute value of an integer
-func abs(x int) int {
+// Abs returns the absolute value of an integer (exported for use in other packages)
+func Abs(x int) int {
 	if x < 0 {
 		return -x
 	}
 	return x
+}
+
+// abs is kept for internal backwards compatibility
+func abs(x int) int {
+	return Abs(x)
 }

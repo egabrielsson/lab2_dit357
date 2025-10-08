@@ -1,11 +1,5 @@
 package message
 
-import (
-	"bufio"
-	"encoding/json"
-	"net"
-)
-
 // Message types for inter-truck communication
 const (
 	TypeWaterRequest   = "water_request"
@@ -103,26 +97,4 @@ func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason st
 		"assigned_truck": assignedTruck,
 		"reason":         reason,
 	}
-}
-
-// Wire protocol functions for TCP communication
-
-// WireWrite sends a message over a TCP connection.
-func WireWrite(conn net.Conn, m Message) error {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	_, err = conn.Write(data)
-	return err
-}
-
-// WireRead reads a message from a TCP connection.
-func WireRead(conn net.Conn, m *Message) error {
-	sc := bufio.NewScanner(conn)
-	if sc.Scan() {
-		return json.Unmarshal(sc.Bytes(), m)
-	}
-	return sc.Err()
 }

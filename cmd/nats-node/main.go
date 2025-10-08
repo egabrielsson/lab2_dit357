@@ -177,8 +177,8 @@ func setupBiddingCoordination(natsTransport *transport.NATSTransport, truckID st
 			
 			fmt.Printf("[%s] Fire detected at (%d,%d) intensity=%d\n", truckID, fireRow, fireCol, intensity)
 			
-			// Calculate distance and submit bid
-			distance := abs(truckRow-fireRow) + abs(truckCol-fireCol)
+			// Calculate distance and submit bid (Manhattan distance)
+			distance := simulation.Abs(truckRow-fireRow) + simulation.Abs(truckCol-fireCol)
 			
 			bidMsg := message.NewMessage(
 				message.TypeFireBid,
@@ -316,11 +316,4 @@ func evaluateBidsForFire(natsTransport *transport.NATSTransport, evaluatorID str
 	)
 	
 	natsTransport.Publish(transport.ChannelFireAssignment, assignment)
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
