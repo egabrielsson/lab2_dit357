@@ -13,8 +13,8 @@ func init() {
 
 const (
 	GridSize      = 20
-	FireChance    = 0.08  // Good balance for demonstration
-	SpreadChance  = 0.10
+	FireChance    = 0.10  // Reasonable fire ignition rate
+	SpreadChance  = 0.03  // Very low spread rate for clear demonstration
 	GrowthPerTick = 1
 )
 

@@ -64,23 +64,54 @@ func (s *Simulator) Step() {
 func (s *Simulator) simpleFirefightingPolicy() {
 	fireR, fireC, found := s.Grid.FindFirstFire()
 	
+	if !found {
+		return
+	}
+	
+	// Collect bids from all trucks
+	var bids []FireBid
 	for _, truck := range s.Trucks {
-		// Refill if water is low
 		if truck.GetWater() < 10 {
+			// Low water trucks don't bid, just refill
 			truck.Refill(s.WaterTank)
+			continue
 		}
 		
-		// Move toward fire if one exists
-		if found {
+		distance := truck.CalculateDistance(fireR, fireC)
+		bids = append(bids, FireBid{
+			TruckID:  truck.ID,
+			Distance: distance,
+			Water:    truck.GetWater(),
+			Lamport:  truck.Clock.Tick(),
+		})
+	}
+	
+	if len(bids) == 0 {
+		return
+	}
+	
+	// Evaluate bids to determine winner
+	winnerID, reason := EvaluateFireBids(bids)
+	
+	// Log the decision
+	fmt.Printf("Fire at (%d,%d): %s assigned to %s\n", fireR, fireC, reason, winnerID)
+	
+	// Only winner moves and fights, others stay idle
+	for _, truck := range s.Trucks {
+		if truck.ID == winnerID {
 			row, col := truck.GetPosition()
 			if row == fireR && col == fireC {
 				truck.Extinguish(s.Grid)
 			} else {
 				truck.MoveToward(fireR, fireC)
-				// Check if moved onto a fire cell
 				if truck.OnFireCell(s.Grid) {
 					truck.Extinguish(s.Grid)
 				}
+			}
+		} else {
+			// Denied trucks don't move
+			if truck.GetWater() >= 10 {
+				fmt.Printf("[%s] Denied - %s is handling the fire\n", truck.ID, winnerID)
 			}
 		}
 	}

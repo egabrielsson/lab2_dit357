@@ -8,13 +8,15 @@ import (
 
 // Message types for inter-truck communication
 const (
-	TypeWaterRequest = "water_request"
-	TypeWaterOffer   = "water_offer"
-	TypeMoveCommand  = "move_command"
-	TypeFireAlert    = "fire_alert"
-	TypeCoordination = "coordination"
-	TypeTruckStatus  = "truck_status"
+	TypeWaterRequest   = "water_request"
+	TypeWaterOffer     = "water_offer"
+	TypeMoveCommand    = "move_command"
+	TypeFireAlert      = "fire_alert"
+	TypeCoordination   = "coordination"
+	TypeTruckStatus    = "truck_status"
 	TypeWaterBroadcast = "water_broadcast"
+	TypeFireBid        = "fire_bid"
+	TypeFireAssignment = "fire_assignment"
 )
 
 // Message represents a communication message between fire trucks.
@@ -80,6 +82,27 @@ func CoordinationPayload(action string, targetRow, targetCol int, details map[st
 		payload[k] = v
 	}
 	return payload
+}
+
+// FireBidPayload creates a payload for fire bidding messages.
+func FireBidPayload(fireRow, fireCol, distance, water int, truckID string) map[string]interface{} {
+	return map[string]interface{}{
+		"fire_row":  fireRow,
+		"fire_col":  fireCol,
+		"distance":  distance,
+		"water":     water,
+		"truck_id":  truckID,
+	}
+}
+
+// FireAssignmentPayload creates a payload for fire assignment result messages.
+func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason string) map[string]interface{} {
+	return map[string]interface{}{
+		"fire_row":       fireRow,
+		"fire_col":       fireCol,
+		"assigned_truck": assignedTruck,
+		"reason":         reason,
+	}
 }
 
 // Wire protocol functions for TCP communication
