@@ -39,7 +39,7 @@ func (t *Firetruck) SetTransport(transport transport.Transport) {
 
 // logf logs a message with Lamport timestamp (disabled for clean simulation output)
 func (t *Firetruck) logf(format string, a ...interface{}) {
-	// Uncomment for debugging:
+	// Uncomment for debugging
 	lt := t.Clock.Tick()
 	_ = lt // prevent unused variable warning
 	// prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
@@ -114,7 +114,8 @@ func (t *Firetruck) Refill(tank *WaterTank) {
 		return
 	}
 	need := t.MaxWater - t.Water
-	got := tank.Withdraw(need)
+	lamportTime := t.Clock.Tick()
+	got := tank.Withdraw(need, t.ID, lamportTime)
 	t.Water += got
 	t.logf("refill got=%d new=%d", got, t.Water)
 }

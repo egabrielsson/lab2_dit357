@@ -1,6 +1,9 @@
 package simulation
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // WaterTank represents the shared water supply for all firetrucks
 type WaterTank struct {
@@ -15,16 +18,25 @@ func NewWaterTank(stock int) *WaterTank {
 
 // Withdraw attempts to withdraw n units of water from the tank.
 // Returns the actual amount withdrawn (may be less than requested).
-func (w *WaterTank) Withdraw(n int) int {
+func (w *WaterTank) Withdraw(n int, truckID string, lamportTime int64) int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if n <= 0 {
 		return 0
 	}
+	requested := n
 	if n > w.stock {
 		n = w.stock
 	}
 	w.stock -= n
+	
+	// Log accepted or denied requests 
+	if n == requested && n > 0 {
+		fmt.Printf("\n Accepted water request: %d from %s (Lamport time %d)\n", n, truckID, lamportTime)
+	} else if n < requested {
+		fmt.Printf("-- Denied/Partial water request: got %d of %d from %s (insufficient supply)\n", n, requested, truckID)
+	}
+	
 	return n
 }
 
