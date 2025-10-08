@@ -13,13 +13,14 @@ import (
 
 // Firetruck represents a fire-fighting truck agent
 type Firetruck struct {
-	ID        string
-	Row, Col  int
-	Water     int
-	MaxWater  int
-	Clock     *clock.LamportClock
-	Transport transport.Transport
-	Task      string // current task description
+	ID           string
+	Row, Col     int
+	Water        int
+	MaxWater     int
+	Clock        *clock.LamportClock
+	Transport    transport.Transport
+	Task         string // current task description
+	AssignedFire *FireLocation // current fire assignment (nil if none)
 }
 
 // NewFiretruck creates a new firetruck at the given position
@@ -28,7 +29,7 @@ func NewFiretruck(id string, r, c int) *Firetruck {
 		ID:       id,
 		Row:      r,
 		Col:      c,
-		Water:    50,
+		Water:    0,
 		MaxWater: 100,
 		Clock:    clock.NewLamportClock(),
 		Task:     "idle",
