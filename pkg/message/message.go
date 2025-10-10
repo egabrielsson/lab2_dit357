@@ -1,20 +1,16 @@
 package message
 
-import (
-	"bufio"
-	"encoding/json"
-	"net"
-)
-
 // Message types for inter-truck communication
 const (
-	TypeWaterRequest = "water_request"
-	TypeWaterOffer   = "water_offer"
-	TypeMoveCommand  = "move_command"
-	TypeFireAlert    = "fire_alert"
-	TypeCoordination = "coordination"
-	TypeTruckStatus  = "truck_status"
+	TypeWaterRequest   = "water_request"
+	TypeWaterOffer     = "water_offer"
+	TypeMoveCommand    = "move_command"
+	TypeFireAlert      = "fire_alert"
+	TypeCoordination   = "coordination"
+	TypeTruckStatus    = "truck_status"
 	TypeWaterBroadcast = "water_broadcast"
+	TypeFireBid        = "fire_bid"
+	TypeFireAssignment = "fire_assignment"
 )
 
 // Message represents a communication message between fire trucks.
@@ -82,24 +78,23 @@ func CoordinationPayload(action string, targetRow, targetCol int, details map[st
 	return payload
 }
 
-// Wire protocol functions for TCP communication
-
-// WireWrite sends a message over a TCP connection.
-func WireWrite(conn net.Conn, m Message) error {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return err
+// FireBidPayload creates a payload for fire bidding messages.
+func FireBidPayload(fireRow, fireCol, distance, water int, truckID string) map[string]interface{} {
+	return map[string]interface{}{
+		"fire_row":  fireRow,
+		"fire_col":  fireCol,
+		"distance":  distance,
+		"water":     water,
+		"truck_id":  truckID,
 	}
-	data = append(data, '\n')
-	_, err = conn.Write(data)
-	return err
 }
 
-// WireRead reads a message from a TCP connection.
-func WireRead(conn net.Conn, m *Message) error {
-	sc := bufio.NewScanner(conn)
-	if sc.Scan() {
-		return json.Unmarshal(sc.Bytes(), m)
+// FireAssignmentPayload creates a payload for fire assignment result messages.
+func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason string) map[string]interface{} {
+	return map[string]interface{}{
+		"fire_row":       fireRow,
+		"fire_col":       fireCol,
+		"assigned_truck": assignedTruck,
+		"reason":         reason,
 	}
-	return sc.Err()
 }

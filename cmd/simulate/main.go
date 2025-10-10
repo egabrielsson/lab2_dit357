@@ -3,14 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
-	"time"
 
 	"Firetruck-sim/pkg/simulation"
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	// Random seed is initialized in pkg/simulation/grid.go init()
 	
 	steps := flag.Int("steps", 50, "simulation steps")
 	trucks := flag.Int("trucks", 2, "number of fire trucks")

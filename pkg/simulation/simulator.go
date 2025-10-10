@@ -59,28 +59,86 @@ func (s *Simulator) Step() {
 	s.simpleFirefightingPolicy()
 }
 
-// simpleFirefightingPolicy implements a basic centralized policy for testing
-// In the full solution, this would be replaced by distributed coordination
+// simpleFirefightingPolicy implements distributed fire assignment
+// Multiple trucks can work on different fires simultaneously
 func (s *Simulator) simpleFirefightingPolicy() {
-	fireR, fireC, found := s.Grid.FindFirstFire()
+	// Find ALL fires on the grid
+	fires := s.Grid.FindAllFires()
 	
-	for _, truck := range s.Trucks {
-		// Refill if water is low
-		if truck.GetWater() < 10 {
-			truck.Refill(s.WaterTank)
+	if len(fires) == 0 {
+		// No fires - clear all assignments and handle refills
+		for _, truck := range s.Trucks {
+			truck.AssignedFire = nil
+			if truck.GetWater() < 10 {
+				truck.Refill(s.WaterTank)
+			}
+		}
+		return
+	}
+	
+	// Track which trucks get assigned
+	assigned := make(map[string]*FireLocation)
+	
+	// For each fire, find the best available truck
+	for i := range fires {
+		fire := &fires[i]
+		var bids []FireBid
+		
+		for _, truck := range s.Trucks {
+			// Skip if already assigned to another fire or low water
+			if assigned[truck.ID] != nil || truck.GetWater() < 10 {
+				continue
+			}
+			
+			distance := truck.CalculateDistance(fire.Row, fire.Col)
+			bids = append(bids, FireBid{
+				TruckID:  truck.ID,
+				Distance: distance,
+				Water:    truck.GetWater(),
+				Lamport:  truck.Clock.Tick(),
+			})
 		}
 		
-		// Move toward fire if one exists
-		if found {
+		if len(bids) == 0 {
+			continue // No available trucks for this fire
+		}
+		
+		// Evaluate bids to determine winner for this fire
+		winnerID, reason := EvaluateFireBids(bids)
+		assigned[winnerID] = fire
+		
+		fmt.Printf("Fire at (%d,%d): %s assigned to %s\n", fire.Row, fire.Col, reason, winnerID)
+	}
+	
+	// Execute actions for ALL trucks simultaneously
+	for _, truck := range s.Trucks {
+		if assignedFire := assigned[truck.ID]; assignedFire != nil {
+			// This truck won a bid - assign and move toward fire
+			truck.AssignedFire = assignedFire
+			
 			row, col := truck.GetPosition()
-			if row == fireR && col == fireC {
+			if row == assignedFire.Row && col == assignedFire.Col {
+				// At the fire location - extinguish it
 				truck.Extinguish(s.Grid)
+				truck.AssignedFire = nil // Clear assignment after extinguishing
 			} else {
-				truck.MoveToward(fireR, fireC)
-				// Check if moved onto a fire cell
+				// Move toward assigned fire
+				truck.MoveToward(assignedFire.Row, assignedFire.Col)
+				// Check if we moved onto another fire
 				if truck.OnFireCell(s.Grid) {
 					truck.Extinguish(s.Grid)
 				}
+			}
+		} else {
+			// Not assigned to any fire
+			truck.AssignedFire = nil
+			
+			if truck.GetWater() < 10 {
+				// Low water - refill
+				truck.Refill(s.WaterTank)
+			} else {
+				// Has water but no assignment - stay idle
+				fmt.Printf("[%s] Idle - no fires available\n", truck.ID)
 			}
 		}
 	}

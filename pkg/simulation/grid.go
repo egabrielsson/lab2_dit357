@@ -13,8 +13,8 @@ func init() {
 
 const (
 	GridSize      = 20
-	FireChance    = 0.08  // Good balance for demonstration
-	SpreadChance  = 0.10
+	FireChance    = 0.10  // Reasonable fire ignition rate
+	SpreadChance  = 0.02  // Very low spread rate for clear demonstration
 	GrowthPerTick = 1
 )
 
@@ -138,16 +138,28 @@ func (g *Grid) Extinguish(r, c, water int) int {
 	return used
 }
 
-// FindFirstFire finds the coordinates of the first fire on the grid
-func (g *Grid) FindFirstFire() (int, int, bool) {
+// FireLocation represents a fire location with its intensity
+type FireLocation struct {
+	Row       int
+	Col       int
+	Intensity int
+}
+
+// FindAllFires returns all fire locations on the grid
+func (g *Grid) FindAllFires() []FireLocation {
+	var fires []FireLocation
 	for r := 0; r < GridSize; r++ {
 		for c := 0; c < GridSize; c++ {
 			if g.cells[r][c].State == Fire {
-				return r, c, true
+				fires = append(fires, FireLocation{
+					Row:       r,
+					Col:       c,
+					Intensity: g.cells[r][c].Intensity,
+				})
 			}
 		}
 	}
-	return 0, 0, false
+	return fires
 }
 
 // Print shows a compact view: . empty, F fire, E extinguished, T truck

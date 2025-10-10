@@ -1,7 +1,10 @@
 package simulation
 
 import (
+	"fmt"
 	"math"
+	"sort"
+	"strings"
 
 	"Firetruck-sim/pkg/clock"
 	"Firetruck-sim/pkg/message"
@@ -10,13 +13,14 @@ import (
 
 // Firetruck represents a fire-fighting truck agent
 type Firetruck struct {
-	ID        string
-	Row, Col  int
-	Water     int
-	MaxWater  int
-	Clock     *clock.LamportClock
-	Transport transport.Transport
-	Task      string // current task description
+	ID           string
+	Row, Col     int
+	Water        int
+	MaxWater     int
+	Clock        *clock.LamportClock
+	Transport    transport.Transport
+	Task         string // current task description
+	AssignedFire *FireLocation // current fire assignment (nil if none)
 }
 
 // NewFiretruck creates a new firetruck at the given position
@@ -25,7 +29,7 @@ func NewFiretruck(id string, r, c int) *Firetruck {
 		ID:       id,
 		Row:      r,
 		Col:      c,
-		Water:    50,
+		Water:    0,
 		MaxWater: 100,
 		Clock:    clock.NewLamportClock(),
 		Task:     "idle",
@@ -42,8 +46,8 @@ func (t *Firetruck) logf(format string, a ...interface{}) {
 	// Uncomment for debugging
 	lt := t.Clock.Tick()
 	_ = lt // prevent unused variable warning
-	// prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
-	// fmt.Println(prefix + fmt.Sprintf(format, a...))
+	prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
+	fmt.Println(prefix + fmt.Sprintf(format, a...))
 }
 
 // MoveToward moves the firetruck one step toward the target coordinates
@@ -191,10 +195,84 @@ func (t *Firetruck) AnnounceIntention(action string, targetRow, targetCol int, d
 	}
 }
 
-// abs returns the absolute value of an integer
-func abs(x int) int {
+// BidForFire broadcasts a bid to respond to a fire at the given location
+func (t *Firetruck) BidForFire(fireRow, fireCol int) {
+	if t.Transport == nil {
+		return
+	}
+	
+	distance := abs(t.Row-fireRow) + abs(t.Col-fireCol) // Manhattan distance
+	
+	msg := message.NewMessage(
+		message.TypeFireBid,
+		t.ID,
+		message.FireBidPayload(fireRow, fireCol, distance, t.Water, t.ID),
+	)
+	msg.Lamport = t.Clock.Tick()
+	
+	if err := t.Transport.Publish(transport.ChannelFireBids, msg); err != nil {
+		t.logf("failed to broadcast fire bid: %v", err)
+	} else {
+		t.logf("bid for fire at (%d,%d): distance=%d water=%d", fireRow, fireCol, distance, t.Water)
+	}
+}
+
+// CalculateDistance returns Manhattan distance to target
+func (t *Firetruck) CalculateDistance(targetRow, targetCol int) int {
+	return abs(t.Row-targetRow) + abs(t.Col-targetCol)
+}
+
+// FireBid represents a truck's bid to respond to a fire
+type FireBid struct {
+	TruckID  string
+	Distance int
+	Water    int
+	Lamport  int64
+}
+
+// EvaluateFireBids determines which truck should respond to a fire
+// Rules: 1) Closest, 2) Most water if tied, 3) Lowest ID if still tied
+func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
+	if len(bids) == 0 {
+		return "", "no bids"
+	}
+	
+	// Sort by: distance (asc), water (desc), ID (asc)
+	sort.Slice(bids, func(i, j int) bool {
+		if bids[i].Distance != bids[j].Distance {
+			return bids[i].Distance < bids[j].Distance
+		}
+		if bids[i].Water != bids[j].Water {
+			return bids[i].Water > bids[j].Water
+		}
+		return strings.Compare(bids[i].TruckID, bids[j].TruckID) < 0
+	})
+	
+	winner = bids[0].TruckID
+	
+	// Build reason string
+	if len(bids) == 1 {
+		reason = "only bidder"
+	} else if bids[0].Distance < bids[1].Distance {
+		reason = fmt.Sprintf("closest (distance=%d)", bids[0].Distance)
+	} else if bids[0].Water > bids[1].Water {
+		reason = fmt.Sprintf("most water (water=%d, tied distance=%d)", bids[0].Water, bids[0].Distance)
+	} else {
+		reason = fmt.Sprintf("lowest ID (tied distance=%d, water=%d)", bids[0].Distance, bids[0].Water)
+	}
+	
+	return winner, reason
+}
+
+// Abs returns the absolute value of an integer (exported for use in other packages)
+func Abs(x int) int {
 	if x < 0 {
 		return -x
 	}
 	return x
+}
+
+// abs is kept for internal backwards compatibility
+func abs(x int) int {
+	return Abs(x)
 }

@@ -42,8 +42,10 @@ type SubscriptionHandler func(message.Message) error
 
 // Common broadcast channels for coordination
 const (
-	ChannelFireAlerts    = "fires.alerts"
-	ChannelTruckStatus   = "trucks.status"
-	ChannelWaterRequests = "water.requests"
-	ChannelCoordination  = "coordination"
+	ChannelFireAlerts     = "fires.alerts"
+	ChannelTruckStatus    = "trucks.status"
+	ChannelWaterRequests  = "water.requests"
+	ChannelCoordination   = "coordination"
+	ChannelFireBids       = "fires.bids"
+	ChannelFireAssignment = "fires.assignment"
 )
