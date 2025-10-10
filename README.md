@@ -22,25 +22,26 @@ This project simulates a distributed fire-fighting system where multiple firetru
 - **Bidding protocols** for optimal fire assignment
 - **Real-time communication** between distributed nodes
 
-### Core Simulation
-- 20x20 grid-based fire simulation
-- Multiple firetrucks with autonomous behavior
-- Dynamic fire ignition, spreading, and extinguishing
-- Water tank management and refilling mechanics
-- Real-time visualization of simulation state
+## Architecture
 
-### Distributed Communication
-- **NATS messaging** for inter-truck communication
-- **Lamport logical clocks** for event ordering
-- **Publish-subscribe** for broadcast messages
+**Components**
 
-### Coordination Protocols
-- **Fire bidding system** - trucks compete for fire assignments
-- **Distance-based optimization** - closest truck typically wins
-- **Water level consideration** - trucks with more water are preferred
-- **Tie-breaking mechanisms** - uses truck IDs for deterministic results
-- **Distributed consensus** - no single point of failure
+**Firetruck Agents:** Each firetruck is an independent agent that contains:
+•  **A Lamport logical clock** for event ordering
+•  **A transport layer** (NATS client) for communication
+•  **Simulation logic** for movement, firefighting, and resource management
+•  **Local state** (position, water level, current task)
 
+**NATS Message Broker:** A central communication hub that manages:
+•  **Multiple communication channels** (fires.alerts, trucks.status, water.requests, coordination, fires.bids, fires.assignment)
+•  *Message routing* between firetrucks
+•  **Publish-subscribe** patterns for broadcast messages
+
+**Communication Channels:** Specialized message channels for different purposes:
+•  **Fire-related channels** for alerts, bidding, and assignments
+•  **Truck status channels** for sharing state information
+•  **Water channels** for resource coordination
+•  **Coordination channels** for movement planning
 
 ## Prerequisites & Installation
 
