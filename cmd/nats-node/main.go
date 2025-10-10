@@ -13,11 +13,8 @@ import (
 func main() {
 	id := flag.String("id", "T1", "truck id")
 	natsURL := flag.String("nats-url", "nats://127.0.0.1:4222", "NATS server URL")
-	peer := flag.String("to", "", "target truck id to address (for request)")
-	request := flag.Bool("request", false, "send a water_request to --to")
-	amount := flag.Int("amount", 20, "amount to request/offer")
-	autoOffer := flag.Bool("auto-offer", false, "auto offer on incoming water_request")
-	timeout := flag.Duration("timeout", 3*time.Second, "request timeout")
+	// amount := flag.Int("amount", 20, "amount to request/offer")
+	// autoOffer := flag.Bool("auto-offer", false, "auto offer on incoming water_request")
 	pubsub := flag.Bool("pubsub", false, "enable pub-sub testing")
 	fireAlert := flag.Bool("fire-alert", false, "send a fire alert broadcast")
 	status := flag.Bool("status", false, "send a status broadcast")
@@ -30,28 +27,6 @@ func main() {
 		panic(err)
 	}
 	defer natsTransport.Close()
-
-	// Start listener that optionally auto-replies to water_request
-	err = natsTransport.Listen(func(msg message.Message) (*message.Message, error) {
-		fmt.Printf("[%s] recv %s from %s (lt=%d): %+v\n",
-			natsTransport.GetID(), msg.Type, msg.From, msg.Lamport, msg.Payload)
-
-		if *autoOffer && msg.Type == message.TypeWaterRequest {
-			reply := message.NewMessage(
-				message.TypeWaterOffer,
-				natsTransport.GetID(),
-				message.WaterOfferPayload(*amount/2),
-			)
-			fmt.Printf("[%s] auto-reply water_offer: %+v\n", natsTransport.GetID(), reply.Payload)
-			return &reply, nil
-		}
-		// No reply by default
-		return nil, nil
-	})
-	
-	if err != nil {
-		panic(err)
-	}
 
 	// Enable pub-sub testing if requested
 	if *pubsub {
@@ -66,26 +41,6 @@ func main() {
 	// Enable coordinator mode if requested
 	if *coordinator {
 		setupBiddingCoordination(natsTransport, *id, true)
-	}
-
-	// Optionally initiate a request to a peer
-	if *request {
-		if *peer == "" {
-			panic("--request needs --to=<TruckID>")
-		}
-		msg := message.NewMessage(
-			message.TypeWaterRequest,
-			natsTransport.GetID(),
-			message.WaterRequestPayload(*amount),
-		)
-		fmt.Printf("[%s] sending water_request to %s...\n", natsTransport.GetID(), *peer)
-		resp, err := natsTransport.Request(*peer, msg, *timeout)
-		if err != nil {
-			fmt.Println("request error:", err)
-		} else {
-			fmt.Printf("[%s] got reply %s from %s (lt=%d): %+v\n",
-				natsTransport.GetID(), resp.Type, resp.From, resp.Lamport, resp.Payload)
-		}
 	}
 
 	// Send fire alert broadcast
@@ -158,7 +113,7 @@ func setupBiddingCoordination(natsTransport *transport.NATSTransport, truckID st
 	bidTimeout := 1500 * time.Millisecond
 	truckRow, truckCol := 0, 0
 	truckWater := 50
-	
+
 	// Assign different starting positions based on ID
 	if truckID == "T1" {
 		truckRow, truckCol = 0, 0
@@ -167,47 +122,47 @@ func setupBiddingCoordination(natsTransport *transport.NATSTransport, truckID st
 	} else {
 		truckRow, truckCol = 10, 10
 	}
-	
+
 	// Trucks (not coordinator) subscribe to fire alerts and auto-bid
 	if !isCoordinator {
 		err := natsTransport.Subscribe(transport.ChannelFireAlerts, func(msg message.Message) error {
 			fireRow := int(msg.Payload["row"].(float64))
 			fireCol := int(msg.Payload["col"].(float64))
 			intensity := int(msg.Payload["intensity"].(float64))
-			
+
 			fmt.Printf("[%s] Fire detected at (%d,%d) intensity=%d\n", truckID, fireRow, fireCol, intensity)
-			
+
 			// Calculate distance and submit bid (Manhattan distance)
 			distance := simulation.Abs(truckRow-fireRow) + simulation.Abs(truckCol-fireCol)
-			
+
 			bidMsg := message.NewMessage(
 				message.TypeFireBid,
 				truckID,
 				message.FireBidPayload(fireRow, fireCol, distance, truckWater, truckID),
 			)
-			
+
 			fmt.Printf("[%s] Submitting bid: distance=%d water=%d\n", truckID, distance, truckWater)
 			natsTransport.Publish(transport.ChannelFireBids, bidMsg)
-			
+
 			return nil
 		})
 		if err != nil {
 			fmt.Printf("Failed to subscribe to fire alerts: %v\n", err)
 		}
 	}
-	
+
 	// Coordinator or trucks subscribe to fire bids
 	err := natsTransport.Subscribe(transport.ChannelFireBids, func(msg message.Message) error {
 		fireKey := fmt.Sprintf("%v,%v", msg.Payload["fire_row"], msg.Payload["fire_col"])
-		
+
 		// Store the bid
 		if bids[fireKey] == nil {
 			bids[fireKey] = []message.Message{}
-			
+
 			// Start timer - only coordinator or lowest ID evaluates
 			go func(key string) {
 				time.Sleep(bidTimeout)
-				
+
 				if isCoordinator {
 					// Coordinator always evaluates
 					evaluateBidsForFire(natsTransport, truckID, key, bids[key])
@@ -219,7 +174,7 @@ func setupBiddingCoordination(natsTransport *transport.NATSTransport, truckID st
 							lowestID = bid.From
 						}
 					}
-					
+
 					// Only evaluate if this truck has the lowest ID
 					if lowestID == truckID {
 						evaluateBidsForFire(natsTransport, truckID, key, bids[key])
@@ -234,29 +189,29 @@ func setupBiddingCoordination(natsTransport *transport.NATSTransport, truckID st
 	if err != nil {
 		fmt.Printf("Failed to subscribe to fire bids: %v\n", err)
 	}
-	
+
 	// Subscribe to fire assignments (only if not coordinator)
 	if !isCoordinator {
 		err = natsTransport.Subscribe(transport.ChannelFireAssignment, func(msg message.Message) error {
-		assignedTruck := msg.Payload["assigned_truck"].(string)
-		fireRow := msg.Payload["fire_row"]
-		fireCol := msg.Payload["fire_col"]
-		reason := msg.Payload["reason"].(string)
-		
-		if assignedTruck == truckID {
-			fmt.Printf("\n[%s] ✓ ACCEPTED for fire at (%v,%v): %s (Lamport time: %d)\n\n",
-				truckID, fireRow, fireCol, reason, msg.Lamport)
-		} else {
-			fmt.Printf("\n[%s] ✗ DENIED for fire at (%v,%v): %s won (%s) (Lamport time: %d)\n\n",
-				truckID, fireRow, fireCol, assignedTruck, reason, msg.Lamport)
-		}
-		return nil
-	})
+			assignedTruck := msg.Payload["assigned_truck"].(string)
+			fireRow := msg.Payload["fire_row"]
+			fireCol := msg.Payload["fire_col"]
+			reason := msg.Payload["reason"].(string)
+
+			if assignedTruck == truckID {
+				fmt.Printf("\n[%s] ✓ ACCEPTED for fire at (%v,%v): %s (Lamport time: %d)\n\n",
+					truckID, fireRow, fireCol, reason, msg.Lamport)
+			} else {
+				fmt.Printf("\n[%s] ✗ DENIED for fire at (%v,%v): %s won (%s) (Lamport time: %d)\n\n",
+					truckID, fireRow, fireCol, assignedTruck, reason, msg.Lamport)
+			}
+			return nil
+		})
 		if err != nil {
 			fmt.Printf("Failed to subscribe to fire assignments: %v\n", err)
 		}
 	}
-	
+
 	if isCoordinator {
 		fmt.Printf("[%s] Coordinator mode enabled\n", truckID)
 	} else {
@@ -268,7 +223,7 @@ func evaluateBidsForFire(natsTransport *transport.NATSTransport, evaluatorID str
 	if len(bidMsgs) == 0 {
 		return
 	}
-	
+
 	// Convert messages to FireBid structs
 	var bids []struct {
 		TruckID  string
@@ -276,7 +231,7 @@ func evaluateBidsForFire(natsTransport *transport.NATSTransport, evaluatorID str
 		Water    int
 		Lamport  int64
 	}
-	
+
 	for _, msg := range bidMsgs {
 		bid := struct {
 			TruckID  string
@@ -291,7 +246,7 @@ func evaluateBidsForFire(natsTransport *transport.NATSTransport, evaluatorID str
 		}
 		bids = append(bids, bid)
 	}
-	
+
 	// Evaluate using the same logic as EvaluateFireBids
 	fireBids := make([]simulation.FireBid, len(bids))
 	for i, b := range bids {
@@ -302,18 +257,18 @@ func evaluateBidsForFire(natsTransport *transport.NATSTransport, evaluatorID str
 			Lamport:  b.Lamport,
 		}
 	}
-	
+
 	winner, reason := simulation.EvaluateFireBids(fireBids)
-	
+
 	// Broadcast the assignment
 	fireRow := bidMsgs[0].Payload["fire_row"]
 	fireCol := bidMsgs[0].Payload["fire_col"]
-	
+
 	assignment := message.NewMessage(
 		message.TypeFireAssignment,
 		evaluatorID,
 		message.FireAssignmentPayload(int(fireRow.(float64)), int(fireCol.(float64)), winner, reason),
 	)
-	
+
 	natsTransport.Publish(transport.ChannelFireAssignment, assignment)
 }

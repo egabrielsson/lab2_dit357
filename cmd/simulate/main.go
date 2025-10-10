@@ -9,9 +9,9 @@ import (
 func main() {
 	// Random seed is initialized in pkg/simulation/grid.go init()
 
-	steps := flag.Int("steps", 50, "simulation steps")
-	trucks := flag.Int("trucks", 2, "number of fire trucks")
-	water := flag.Int("water", 500, "initial water supply")
+	steps := flag.Int("steps", 200, "simulation steps")
+	trucks := flag.Int("trucks", 5, "number of fire trucks")
+	water := flag.Int("water", 1000, "initial water supply")
 	flag.Parse()
 
 	fmt.Printf("Starting fire simulation with %d trucks, %d water units, %d steps\n",

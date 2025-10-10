@@ -17,11 +17,12 @@ type Simulator struct {
 func NewSimulator(numTrucks int, waterSupply int) *Simulator {
 	grid := NewGrid()
 	tank := NewWaterTank(waterSupply)
-	
+
 	trucks := make([]*Firetruck, numTrucks)
 	for i := 0; i < numTrucks; i++ {
 		// Place trucks at different corners/positions
 		var row, col int
+
 		switch i % 4 {
 		case 0:
 			row, col = 0, 0
@@ -32,11 +33,11 @@ func NewSimulator(numTrucks int, waterSupply int) *Simulator {
 		case 3:
 			row, col = GridSize-1, 0
 		}
-		
+
 		truck := NewFiretruck(fmt.Sprintf("T%d", i+1), row, col)
 		trucks[i] = truck
 	}
-	
+
 	return &Simulator{
 		Grid:      grid,
 		Trucks:    trucks,
@@ -48,13 +49,13 @@ func NewSimulator(numTrucks int, waterSupply int) *Simulator {
 // Step advances the simulation by one timestep
 func (s *Simulator) Step() {
 	s.Steps++
-	
+
 	// 1. Random fire ignition
 	s.Grid.IgniteRandom(FireChance)
-	
+
 	// 2. Fire spreading and growth
 	s.Grid.StepFires()
-	
+
 	// 3. Truck actions (this is where distributed coordination would go)
 	s.simpleFirefightingPolicy()
 }
@@ -64,7 +65,7 @@ func (s *Simulator) Step() {
 func (s *Simulator) simpleFirefightingPolicy() {
 	// Find ALL fires on the grid
 	fires := s.Grid.FindAllFires()
-	
+
 	if len(fires) == 0 {
 		// No fires - clear all assignments and handle refills
 		for _, truck := range s.Trucks {
@@ -75,21 +76,21 @@ func (s *Simulator) simpleFirefightingPolicy() {
 		}
 		return
 	}
-	
+
 	// Track which trucks get assigned
 	assigned := make(map[string]*FireLocation)
-	
+
 	// For each fire, find the best available truck
 	for i := range fires {
 		fire := &fires[i]
 		var bids []FireBid
-		
+
 		for _, truck := range s.Trucks {
 			// Skip if already assigned to another fire or low water
 			if assigned[truck.ID] != nil || truck.GetWater() < 10 {
 				continue
 			}
-			
+
 			distance := truck.CalculateDistance(fire.Row, fire.Col)
 			bids = append(bids, FireBid{
 				TruckID:  truck.ID,
@@ -98,24 +99,24 @@ func (s *Simulator) simpleFirefightingPolicy() {
 				Lamport:  truck.Clock.Tick(),
 			})
 		}
-		
+
 		if len(bids) == 0 {
 			continue // No available trucks for this fire
 		}
-		
+
 		// Evaluate bids to determine winner for this fire
 		winnerID, reason := EvaluateFireBids(bids)
 		assigned[winnerID] = fire
-		
+
 		fmt.Printf("Fire at (%d,%d): %s assigned to %s\n", fire.Row, fire.Col, reason, winnerID)
 	}
-	
+
 	// Execute actions for ALL trucks simultaneously
 	for _, truck := range s.Trucks {
 		if assignedFire := assigned[truck.ID]; assignedFire != nil {
 			// This truck won a bid - assign and move toward fire
 			truck.AssignedFire = assignedFire
-			
+
 			row, col := truck.GetPosition()
 			if row == assignedFire.Row && col == assignedFire.Col {
 				// At the fire location - extinguish it
@@ -132,7 +133,7 @@ func (s *Simulator) simpleFirefightingPolicy() {
 		} else {
 			// Not assigned to any fire
 			truck.AssignedFire = nil
-			
+
 			if truck.GetWater() < 10 {
 				// Low water - refill
 				truck.Refill(s.WaterTank)
@@ -150,7 +151,7 @@ func (s *Simulator) Run(maxSteps int) {
 		fmt.Printf("\nStep %d\n", step)
 		s.Step()
 		s.Print()
-		
+
 		// Small delay for visibility
 		time.Sleep(100 * time.Millisecond)
 	}
