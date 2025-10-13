@@ -19,7 +19,7 @@ type Firetruck struct {
 	MaxWater     int
 	Clock        *clock.LamportClock
 	Transport    transport.Transport
-	Task         string // current task description
+	Task         string        // current task description
 	AssignedFire *FireLocation // current fire assignment (nil if none)
 }
 
@@ -53,7 +53,7 @@ func (t *Firetruck) logf(format string, a ...interface{}) {
 // MoveToward moves the firetruck one step toward the target coordinates
 func (t *Firetruck) MoveToward(targetR, targetC int) {
 	oldRow, oldCol := t.Row, t.Col
-	
+
 	dr := int(math.Copysign(1, float64(targetR-t.Row)))
 	if targetR == t.Row {
 		dr = 0
@@ -68,7 +68,7 @@ func (t *Firetruck) MoveToward(targetR, targetC int) {
 	} else if dc != 0 {
 		t.Col += dc
 	}
-	
+
 	// Announce movement intention if transport is available and we actually moved
 	if t.Transport != nil && (oldRow != t.Row || oldCol != t.Col) {
 		t.AnnounceIntention("moving", targetR, targetC, map[string]interface{}{
@@ -76,7 +76,7 @@ func (t *Firetruck) MoveToward(targetR, targetC int) {
 			"from_col": oldCol,
 		})
 	}
-	
+
 	t.logf("move to (%d,%d)", t.Row, t.Col)
 }
 
@@ -95,19 +95,19 @@ func (t *Firetruck) Extinguish(grid *Grid) {
 		t.logf("no water to extinguish")
 		return
 	}
-	
+
 	// Get fire intensity before extinguishing
 	cell := grid.GetCell(t.Row, t.Col)
 	fireIntensity := cell.Intensity
-	
+
 	used := grid.Extinguish(t.Row, t.Col, t.Water)
 	t.Water -= used
-	
+
 	// Broadcast fire alert if we discovered a new fire
 	if t.Transport != nil && fireIntensity > 0 {
 		t.BroadcastFireAlert(t.Row, t.Col, fireIntensity)
 	}
-	
+
 	t.SetTask("extinguishing")
 	t.logf("extinguish used=%d remaining=%d", used, t.Water)
 }
@@ -145,13 +145,13 @@ func (t *Firetruck) BroadcastFireAlert(row, col, intensity int) {
 	if t.Transport == nil {
 		return
 	}
-	
+
 	msg := message.NewMessage(
 		message.TypeFireAlert,
 		t.ID,
 		message.FireAlertPayload(row, col, intensity),
 	)
-	
+
 	if err := t.Transport.Publish(transport.ChannelFireAlerts, msg); err != nil {
 		t.logf("failed to broadcast fire alert: %v", err)
 	} else {
@@ -164,13 +164,13 @@ func (t *Firetruck) BroadcastStatus() {
 	if t.Transport == nil {
 		return
 	}
-	
+
 	msg := message.NewMessage(
 		message.TypeTruckStatus,
 		t.ID,
 		message.TruckStatusPayload(t.Row, t.Col, t.Water, t.MaxWater, t.Task),
 	)
-	
+
 	if err := t.Transport.Publish(transport.ChannelTruckStatus, msg); err != nil {
 		t.logf("failed to broadcast status: %v", err)
 	}
@@ -181,13 +181,13 @@ func (t *Firetruck) AnnounceIntention(action string, targetRow, targetCol int, d
 	if t.Transport == nil {
 		return
 	}
-	
+
 	msg := message.NewMessage(
 		message.TypeCoordination,
 		t.ID,
 		message.CoordinationPayload(action, targetRow, targetCol, details),
 	)
-	
+
 	if err := t.Transport.Publish(transport.ChannelCoordination, msg); err != nil {
 		t.logf("failed to announce intention: %v", err)
 	} else {
@@ -200,16 +200,16 @@ func (t *Firetruck) BidForFire(fireRow, fireCol int) {
 	if t.Transport == nil {
 		return
 	}
-	
+
 	distance := abs(t.Row-fireRow) + abs(t.Col-fireCol) // Manhattan distance
-	
+
 	msg := message.NewMessage(
 		message.TypeFireBid,
 		t.ID,
 		message.FireBidPayload(fireRow, fireCol, distance, t.Water, t.ID),
 	)
 	msg.Lamport = t.Clock.Tick()
-	
+
 	if err := t.Transport.Publish(transport.ChannelFireBids, msg); err != nil {
 		t.logf("failed to broadcast fire bid: %v", err)
 	} else {
@@ -236,7 +236,7 @@ func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
 	if len(bids) == 0 {
 		return "", "no bids"
 	}
-	
+
 	// Sort by: distance (asc), water (desc), ID (asc)
 	sort.Slice(bids, func(i, j int) bool {
 		if bids[i].Distance != bids[j].Distance {
@@ -247,9 +247,9 @@ func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
 		}
 		return strings.Compare(bids[i].TruckID, bids[j].TruckID) < 0
 	})
-	
+
 	winner = bids[0].TruckID
-	
+
 	// Build reason string
 	if len(bids) == 1 {
 		reason = "only bidder"
@@ -260,7 +260,7 @@ func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
 	} else {
 		reason = fmt.Sprintf("lowest ID (tied distance=%d, water=%d)", bids[0].Distance, bids[0].Water)
 	}
-	
+
 	return winner, reason
 }
 

@@ -2,8 +2,6 @@ package message
 
 // Message types for inter-truck communication
 const (
-	TypeWaterRequest   = "water_request"
-	TypeWaterOffer     = "water_offer"
 	TypeMoveCommand    = "move_command"
 	TypeFireAlert      = "fire_alert"
 	TypeCoordination   = "coordination"
@@ -17,7 +15,6 @@ const (
 type Message struct {
 	Type    string                 `json:"type"`
 	From    string                 `json:"from"`
-	To      string                 `json:"to,omitempty"`
 	Lamport int64                  `json:"lamport"`
 	Payload map[string]interface{} `json:"payload,omitempty"`
 }
@@ -28,20 +25,6 @@ func NewMessage(msgType, from string, payload map[string]interface{}) Message {
 		Type:    msgType,
 		From:    from,
 		Payload: payload,
-	}
-}
-
-// WaterRequestPayload creates a payload for water request messages.
-func WaterRequestPayload(amount int) map[string]interface{} {
-	return map[string]interface{}{
-		"amount": amount,
-	}
-}
-
-// WaterOfferPayload creates a payload for water offer messages.
-func WaterOfferPayload(amount int) map[string]interface{} {
-	return map[string]interface{}{
-		"amount": amount,
 	}
 }
 
@@ -81,11 +64,11 @@ func CoordinationPayload(action string, targetRow, targetCol int, details map[st
 // FireBidPayload creates a payload for fire bidding messages.
 func FireBidPayload(fireRow, fireCol, distance, water int, truckID string) map[string]interface{} {
 	return map[string]interface{}{
-		"fire_row":  fireRow,
-		"fire_col":  fireCol,
-		"distance":  distance,
-		"water":     water,
-		"truck_id":  truckID,
+		"fire_row": fireRow,
+		"fire_col": fireCol,
+		"distance": distance,
+		"water":    water,
+		"truck_id": truckID,
 	}
 }
 

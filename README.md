@@ -26,22 +26,22 @@ This project simulates a distributed fire-fighting system where multiple firetru
 
 **Components**
 
-**Firetruck Agents:** Each firetruck is an independent agent that contains:
-**A Lamport logical clock** for event ordering
-**A transport layer** (NATS client) for communication
-**Simulation logic** for movement, firefighting, and resource management
-**Local state** (position, water level, current task)
+**Each firetruck is an independent agent that contains:**
+- **A Lamport logical clock** for event ordering
+- **A transport layer** (NATS client) for communication
+- **Simulation logic** for movement, firefighting, and resource management
+- **Local state** (position, water level, current task)
 
-**NATS Message Broker:** A central communication hub that manages:
-**Multiple communication channels** (fires.alerts, trucks.status, water.requests, coordination, fires.bids, fires.assignment)
-**Message routing** between firetrucks
-**Publish-subscribe** patterns for broadcast messages
+- **NATS Message Broker:** A central communication hub that manages:
+- **Multiple communication channels** (fires.alerts, trucks.status, water.requests, coordination, fires.bids, fires.assignment)
+- **Message routing** between firetrucks
+- **Publish-subscribe** patterns for broadcast messages
 
-**Communication Channels:** Specialized message channels for different purposes:
-**Fire-related channels** for alerts, bidding, and assignments
-**Truck status channels** for sharing state information
-**Water channels** for resource coordination
-**Coordination channels** for movement planning
+- **Communication Channels:** Specialized message channels for different purposes:
+- **Fire-related channels** for alerts, bidding, and assignments
+- **Truck status channels** for sharing state information
+- **Water channels** for resource coordination
+- **Coordination channels** for movement planning
 
 ## Prerequisites & Installation
 
