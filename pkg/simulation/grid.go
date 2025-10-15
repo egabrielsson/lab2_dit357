@@ -14,7 +14,7 @@ func init() {
 const (
 	GridSize      = 20
 	FireChance    = 0.10 // Reasonable fire ignition rate
-	SpreadChance  = 0.05 // Very low spread rate for clear demonstration
+	SpreadChance  = 0.02 // Low spread rate for demonstration
 	GrowthPerTick = 1
 )
 
@@ -84,22 +84,33 @@ func (g *Grid) IgniteRandom(chance float64) {
 }
 
 // StepFires advances the fire dynamics by one tick: fires grow and may spread
-func (g *Grid) StepFires() {
+// Returns a list of new fire locations that were created by spreading
+func (g *Grid) StepFires() []FireLocation {
 	newCells := make([][]Cell, GridSize)
 	for i := range newCells {
 		newCells[i] = make([]Cell, GridSize)
 		copy(newCells[i], g.cells[i])
 	}
 
+	var newFires []FireLocation
+
 	for r := 0; r < GridSize; r++ {
 		for c := 0; c < GridSize; c++ {
 			switch g.cells[r][c].State {
 			case Fire:
 				newCells[r][c].Intensity += GrowthPerTick
-				g.trySpread(newCells, r-1, c)
-				g.trySpread(newCells, r+1, c)
-				g.trySpread(newCells, r, c-1)
-				g.trySpread(newCells, r, c+1)
+				if g.trySpread(newCells, r-1, c) {
+					newFires = append(newFires, FireLocation{Row: r-1, Col: c})
+				}
+				if g.trySpread(newCells, r+1, c) {
+					newFires = append(newFires, FireLocation{Row: r+1, Col: c})
+				}
+				if g.trySpread(newCells, r, c-1) {
+					newFires = append(newFires, FireLocation{Row: r, Col: c-1})
+				}
+				if g.trySpread(newCells, r, c+1) {
+					newFires = append(newFires, FireLocation{Row: r, Col: c+1})
+				}
 			case Extinguished:
 				// stays extinguished
 			case Empty:
@@ -108,34 +119,56 @@ func (g *Grid) StepFires() {
 		}
 	}
 	g.cells = newCells
+	return newFires
 }
 
 // trySpread attempts to spread fire to adjacent cells
-func (g *Grid) trySpread(newCells [][]Cell, r, c int) {
+// Returns true if a new fire was created
+func (g *Grid) trySpread(newCells [][]Cell, r, c int) bool {
 	if !g.InBounds(r, c) {
-		return
+		return false
 	}
 	if g.cells[r][c].State == Empty && rand.Float64() < SpreadChance {
 		newCells[r][c] = Cell{State: Fire, Intensity: 1}
+		return true
 	}
+	return false
 }
 
-// Extinguish applies up to `water` units to the cell at (r,c).
+// WaterCostForStep returns exponential cost for extinguishing one intensity step
+func WaterCostForStep(intensity int) int {
+	if intensity <= 0 {
+		return 0
+	}
+	if intensity > 10 {
+		intensity = 10
+	}
+	return 1 << intensity // 2^intensity
+}
+
+// Extinguish applies up to `water` units to the cell at (r,c) using exponential cost.
 // Returns how much water was actually used.
 func (g *Grid) Extinguish(r, c, water int) int {
 	if !g.InBounds(r, c) || g.cells[r][c].State != Fire || water <= 0 {
 		return 0
 	}
-	used := water
-	if g.cells[r][c].Intensity < used {
-		used = g.cells[r][c].Intensity
+
+	totalUsed := 0
+	for water > 0 && g.cells[r][c].Intensity > 0 {
+		cost := WaterCostForStep(g.cells[r][c].Intensity)
+		if water >= cost {
+			g.cells[r][c].Intensity--
+			water -= cost
+			totalUsed += cost
+		} else {
+			break // not enough water for this step
+		}
 	}
-	g.cells[r][c].Intensity -= used
+
 	if g.cells[r][c].Intensity <= 0 {
-		g.cells[r][c].Intensity = 0
 		g.cells[r][c].State = Extinguished
 	}
-	return used
+	return totalUsed
 }
 
 // FireLocation represents a fire location with its intensity
