@@ -9,6 +9,17 @@ const (
 	TypeWaterBroadcast = "water_broadcast"
 	TypeFireBid        = "fire_bid"
 	TypeFireAssignment = "fire_assignment"
+	TypeWaterRequest   = "water_request"
+	TypeWaterResponse  = "water_response"
+
+	// New types for decentralized system
+	TypeFireAnnounce   = "fire_announce"
+	TypeBid            = "bid"
+	TypeBidDecision    = "bid_decision"
+	TypeTick           = "tick"
+	TypeWaterReq       = "water_req"
+	TypeWaterReply     = "water_reply"
+	TypeWaterRelease   = "water_release"
 )
 
 // Message represents a communication message between fire trucks.
@@ -81,3 +92,36 @@ func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason st
 		"reason":         reason,
 	}
 }
+
+// Typed payloads for decentralized system
+type FireID struct{ X, Y int }
+
+type FireAnnounce struct {
+	ID        FireID
+	Intensity int
+	Tick      uint64
+}
+
+type Bid struct {
+	Fire    FireID
+	Bidder  string
+	Score   int
+	Lamport int
+}
+
+type BidDecision struct {
+	Fire    FireID
+	Winner  string
+	Lamport int
+}
+
+// Deterministic world tick
+type Tick struct {
+	Tick uint64
+	Seed int64
+}
+
+// RA messages
+type WaterReq struct{ From string; TS int }
+type WaterReply struct{ From string }
+type WaterRelease struct{ From string }
