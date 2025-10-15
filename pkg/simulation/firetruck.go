@@ -21,18 +21,56 @@ type Firetruck struct {
 	Transport    transport.Transport
 	Task         string        // current task description
 	AssignedFire *FireLocation // current fire assignment (nil if none)
+
+	// Ricart-Agrawala state for water mutual exclusion
+	ra            raState
+	myReqTS       int
+	replies       map[string]bool
+	deferred      map[string]bool
+	peers         map[string]bool
+	lowWaterThresh int
 }
+
+type raState int
+const (
+	raIdle raState = iota
+	raRequesting
+	raHeld
+)
 
 // NewFiretruck creates a new firetruck at the given position
 func NewFiretruck(id string, r, c int) *Firetruck {
 	return &Firetruck{
-		ID:       id,
-		Row:      r,
-		Col:      c,
-		Water:    0,
-		MaxWater: 100,
-		Clock:    clock.NewLamportClock(),
-		Task:     "idle",
+		ID:             id,
+		Row:            r,
+		Col:            c,
+		Water:          30, // Start with some water
+		MaxWater:       50,
+		Clock:          clock.NewLamportClock(),
+		Task:           "idle",
+		ra:             raIdle,
+		replies:        make(map[string]bool),
+		deferred:       make(map[string]bool),
+		peers:          make(map[string]bool),
+		lowWaterThresh: 10,
+	}
+}
+
+// GetStartingPosition returns the starting position for a truck based on its ID
+// This centralizes the spawn location logic used across simulation and NATS demo
+func GetStartingPosition(truckID string, gridSize int) (row, col int) {
+	switch truckID {
+	case "T1":
+		return 0, 0
+	case "T2":
+		return gridSize - 1, gridSize - 1
+	case "T3":
+		return 0, gridSize - 1
+	case "T4":
+		return gridSize - 1, 0
+	default:
+		// For T5+ or other IDs, place in center
+		return gridSize / 2, gridSize / 2
 	}
 }
 
@@ -41,13 +79,11 @@ func (t *Firetruck) SetTransport(transport transport.Transport) {
 	t.Transport = transport
 }
 
-// logf logs a message with Lamport timestamp (disabled for clean simulation output)
+// logf logs a simple message
 func (t *Firetruck) logf(format string, a ...interface{}) {
-	// Uncomment for debugging
-	lt := t.Clock.Tick()
-	_ = lt // prevent unused variable warning
-	prefix := fmt.Sprintf("[%s lt=%d] ", t.ID, lt)
-	fmt.Println(prefix + fmt.Sprintf(format, a...))
+	fmt.Printf("[%s] ", t.ID)
+	fmt.Printf(format, a...)
+	fmt.Println()
 }
 
 // MoveToward moves the firetruck one step toward the target coordinates
@@ -77,7 +113,7 @@ func (t *Firetruck) MoveToward(targetR, targetC int) {
 		})
 	}
 
-	t.logf("move to (%d,%d)", t.Row, t.Col)
+	t.logf("moved to (%d,%d)", t.Row, t.Col)
 }
 
 // OnFireCell checks if the firetruck is currently on a cell with fire
@@ -92,7 +128,7 @@ func (t *Firetruck) Extinguish(grid *Grid) {
 		return
 	}
 	if t.Water <= 0 {
-		t.logf("no water to extinguish")
+		t.logf("no water to extinguish fire")
 		return
 	}
 
@@ -109,19 +145,7 @@ func (t *Firetruck) Extinguish(grid *Grid) {
 	}
 
 	t.SetTask("extinguishing")
-	t.logf("extinguish used=%d remaining=%d", used, t.Water)
-}
-
-// Refill refills the firetruck's water tank from the central water supply
-func (t *Firetruck) Refill(tank *WaterTank) {
-	if t.Water >= t.MaxWater {
-		return
-	}
-	need := t.MaxWater - t.Water
-	lamportTime := t.Clock.Tick()
-	got := tank.Withdraw(need, t.ID, lamportTime)
-	t.Water += got
-	t.logf("refill got=%d new=%d", got, t.Water)
+	t.logf("extinguished fire, used %d water, remaining %d/%d", used, t.Water, t.MaxWater)
 }
 
 // GetPosition returns the current position of the firetruck
@@ -132,6 +156,11 @@ func (t *Firetruck) GetPosition() (int, int) {
 // GetWater returns the current water level
 func (t *Firetruck) GetWater() int {
 	return t.Water
+}
+
+// GetLowWaterThresh returns the low water threshold
+func (t *Firetruck) GetLowWaterThresh() int {
+	return t.lowWaterThresh
 }
 
 // SetTask sets the current task and broadcasts status if transport is available
@@ -170,10 +199,20 @@ func (t *Firetruck) BroadcastStatus() {
 		t.ID,
 		message.TruckStatusPayload(t.Row, t.Col, t.Water, t.MaxWater, t.Task),
 	)
+	msg.Lamport = t.Clock.Tick()
 
 	if err := t.Transport.Publish(transport.ChannelTruckStatus, msg); err != nil {
 		t.logf("failed to broadcast status: %v", err)
 	}
+}
+
+// AddWater adds water to the firetruck's tank (used when receiving from water supply)
+func (t *Firetruck) AddWater(amount int) {
+	t.Water += amount
+	if t.Water > t.MaxWater {
+		t.Water = t.MaxWater
+	}
+	t.logf("received water=%d new_total=%d", amount, t.Water)
 }
 
 // AnnounceIntention broadcasts coordination message about planned action
@@ -213,7 +252,7 @@ func (t *Firetruck) BidForFire(fireRow, fireCol int) {
 	if err := t.Transport.Publish(transport.ChannelFireBids, msg); err != nil {
 		t.logf("failed to broadcast fire bid: %v", err)
 	} else {
-		t.logf("bid for fire at (%d,%d): distance=%d water=%d", fireRow, fireCol, distance, t.Water)
+		t.logf("bidding for fire at (%d,%d), distance %d, water %d", fireRow, fireCol, distance, t.Water)
 	}
 }
 
@@ -275,4 +314,136 @@ func Abs(x int) int {
 // abs is kept for internal backwards compatibility
 func abs(x int) int {
 	return Abs(x)
+}
+
+// Ricart-Agrawala mutual exclusion methods
+
+// StartRA initializes RA subscriptions and peer discovery
+func (t *Firetruck) StartRA() {
+	// Subscribe to RA channels
+	t.Transport.Subscribe(transport.ChannelWaterReq, t.handleWaterReq)
+	t.Transport.Subscribe(transport.ChannelWaterReply, t.handleWaterReply)
+	t.Transport.Subscribe(transport.ChannelWaterRelease, t.handleWaterRelease)
+	t.Transport.Subscribe(transport.ChannelTruckStatus, t.handleTruckStatus)
+}
+
+// handleTruckStatus discovers peers
+func (t *Firetruck) handleTruckStatus(msg message.Message) error {
+	if msg.From != t.ID {
+		t.peers[msg.From] = true
+	}
+	return nil
+}
+
+// RequestWaterRA initiates Ricart-Agrawala protocol for water refill
+func (t *Firetruck) RequestWaterRA() {
+	if t.ra != raIdle || t.Water > t.lowWaterThresh {
+		return
+	}
+
+	t.ra = raRequesting
+	t.myReqTS = int(t.Clock.Tick())
+	t.replies = make(map[string]bool)
+
+	t.logf("[ME] REQUEST ts=%d", t.myReqTS)
+
+	// Send request to all peers
+	req := message.Message{
+		Type:    message.TypeWaterReq,
+		From:    t.ID,
+		Lamport: int64(t.myReqTS),
+		Payload: map[string]interface{}{"ts": t.myReqTS},
+	}
+	t.Transport.Publish(transport.ChannelWaterReq, req)
+}
+
+// handleWaterReq processes incoming water requests
+func (t *Firetruck) handleWaterReq(msg message.Message) error {
+	ts := int(msg.Payload["ts"].(float64))
+
+	if t.ra == raHeld || (t.ra == raRequesting && (ts > t.myReqTS || (ts == t.myReqTS && msg.From > t.ID))) {
+		// Defer reply
+		t.deferred[msg.From] = true
+		t.logf("[ME] DEFER %s", msg.From)
+	} else {
+		// Reply immediately
+		reply := message.Message{
+			Type:    message.TypeWaterReply,
+			From:    t.ID,
+			Lamport: t.Clock.Tick(),
+		}
+		t.Transport.Publish(transport.ChannelWaterReply, reply)
+		t.logf("[ME] REPLY-> %s", msg.From)
+	}
+	return nil
+}
+
+// handleWaterReply processes replies
+func (t *Firetruck) handleWaterReply(msg message.Message) error {
+	if t.ra == raRequesting {
+		t.replies[msg.From] = true
+		// Check if we have all replies
+		allReplied := true
+		for peer := range t.peers {
+			if peer != t.ID && !t.replies[peer] {
+				allReplied = false
+				break
+			}
+		}
+		if allReplied {
+			t.enterCS()
+		}
+	}
+	return nil
+}
+
+// handleWaterRelease processes releases
+func (t *Firetruck) handleWaterRelease(msg message.Message) error {
+	if t.deferred[msg.From] {
+		delete(t.deferred, msg.From)
+		reply := message.Message{
+			Type:    message.TypeWaterReply,
+			From:    t.ID,
+			Lamport: t.Clock.Tick(),
+		}
+		t.Transport.Publish(transport.ChannelWaterReply, reply)
+		t.logf("[ME] REPLY-> %s (deferred)", msg.From)
+	}
+	return nil
+}
+
+// enterCS enters the critical section (water refill)
+func (t *Firetruck) enterCS() {
+	t.ra = raHeld
+	t.Water = t.MaxWater
+	t.logf("[ME] ENTER CS (refill)")
+
+	// Exit CS immediately after refill
+	t.exitCS()
+}
+
+// exitCS exits the critical section
+func (t *Firetruck) exitCS() {
+	t.ra = raIdle
+
+	// Send release to all peers
+	release := message.Message{
+		Type:    message.TypeWaterRelease,
+		From:    t.ID,
+		Lamport: t.Clock.Tick(),
+	}
+	t.Transport.Publish(transport.ChannelWaterRelease, release)
+	t.logf("[ME] RELEASE")
+
+	// Reply to all deferred requests
+	for peer := range t.deferred {
+		delete(t.deferred, peer)
+		reply := message.Message{
+			Type:    message.TypeWaterReply,
+			From:    t.ID,
+			Lamport: t.Clock.Tick(),
+		}
+		t.Transport.Publish(transport.ChannelWaterReply, reply)
+		t.logf("[ME] REPLY-> %s (deferred)", peer)
+	}
 }
