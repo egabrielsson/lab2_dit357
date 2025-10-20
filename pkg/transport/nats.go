@@ -5,6 +5,7 @@ import (
 	"Firetruck-sim/pkg/message"
 	"encoding/json"
 	"fmt"
+
 	"github.com/nats-io/nats.go"
 )
 
@@ -43,10 +44,18 @@ func (nt *NATSTransport) GetID() string {
 	return nt.id
 }
 
+// SetClock sets the Lamport clock for this transport
+func (nt *NATSTransport) SetClock(clock *clock.LamportClock) {
+	nt.clock = clock
+}
+
 // Publish broadcasts a message to all subscribers of a channel.
 func (nt *NATSTransport) Publish(channel string, msg message.Message) error {
 	msg.From = nt.id
-	msg.Lamport = nt.clock.Tick()
+	// Only set Lamport if not already set by caller
+	if msg.Lamport == 0 {
+		msg.Lamport = nt.clock.Tick()
+	}
 
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -65,15 +74,10 @@ func (nt *NATSTransport) Subscribe(channel string, handler SubscriptionHandler) 
 			return
 		}
 
-		// Skip messages from ourselves
-		if msg.From == nt.id {
-			return
-		}
-
 		// Update Lamport clock
 		nt.clock.Receive(msg.Lamport)
 
-		// Call handler (no reply expected for broadcasts)
+		// Call handler
 		if err := handler(msg); err != nil {
 			fmt.Printf("Error handling broadcast message: %v\n", err)
 		}

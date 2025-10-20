@@ -9,9 +9,18 @@ const (
 	TypeWaterBroadcast = "water_broadcast"
 	TypeFireBid        = "fire_bid"
 	TypeFireAssignment = "fire_assignment"
+	TypeWaterRequest   = "water_request"
+	TypeWaterResponse  = "water_response"
+	TypeFireAnnounce   = "fire_announce"
+	TypeBid            = "bid"
+	TypeBidDecision    = "bid_decision"
+	TypeTick           = "tick"
+	TypeWaterReq       = "water_req"
+	TypeWaterReply     = "water_reply"
+	TypeWaterRelease   = "water_release"
 )
 
-// Message represents a communication message between fire trucks.
+// Represents a communication message between fire trucks
 type Message struct {
 	Type    string                 `json:"type"`
 	From    string                 `json:"from"`
@@ -19,7 +28,7 @@ type Message struct {
 	Payload map[string]interface{} `json:"payload,omitempty"`
 }
 
-// NewMessage creates a new message with the specified type and payload.
+// Creates a new message with the specified type and payload
 func NewMessage(msgType, from string, payload map[string]interface{}) Message {
 	return Message{
 		Type:    msgType,
@@ -28,7 +37,7 @@ func NewMessage(msgType, from string, payload map[string]interface{}) Message {
 	}
 }
 
-// FireAlertPayload creates a payload for fire alert messages.
+// Creates a payload for fire alert messages
 func FireAlertPayload(row, col, intensity int) map[string]interface{} {
 	return map[string]interface{}{
 		"row":       row,
@@ -37,7 +46,7 @@ func FireAlertPayload(row, col, intensity int) map[string]interface{} {
 	}
 }
 
-// TruckStatusPayload creates a payload for truck status broadcast messages.
+// Creates a payload for truck status broadcast messages
 func TruckStatusPayload(row, col, water, maxWater int, task string) map[string]interface{} {
 	return map[string]interface{}{
 		"row":       row,
@@ -48,7 +57,7 @@ func TruckStatusPayload(row, col, water, maxWater int, task string) map[string]i
 	}
 }
 
-// CoordinationPayload creates a payload for coordination messages.
+// Creates a payload for coordination messages
 func CoordinationPayload(action string, targetRow, targetCol int, details map[string]interface{}) map[string]interface{} {
 	payload := map[string]interface{}{
 		"action":     action,
@@ -61,7 +70,7 @@ func CoordinationPayload(action string, targetRow, targetCol int, details map[st
 	return payload
 }
 
-// FireBidPayload creates a payload for fire bidding messages.
+// Creates a payload for fire bidding messages
 func FireBidPayload(fireRow, fireCol, distance, water int, truckID string) map[string]interface{} {
 	return map[string]interface{}{
 		"fire_row": fireRow,
@@ -72,7 +81,7 @@ func FireBidPayload(fireRow, fireCol, distance, water int, truckID string) map[s
 	}
 }
 
-// FireAssignmentPayload creates a payload for fire assignment result messages.
+// Creates a payload for fire assignment result messages
 func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason string) map[string]interface{} {
 	return map[string]interface{}{
 		"fire_row":       fireRow,
@@ -81,3 +90,38 @@ func FireAssignmentPayload(fireRow, fireCol int, assignedTruck string, reason st
 		"reason":         reason,
 	}
 }
+
+// Typed payloads
+type FireID struct{ X, Y int }
+
+type FireAnnounce struct {
+	ID        FireID
+	Intensity int
+	Tick      uint64
+}
+
+type Bid struct {
+	Fire    FireID
+	Bidder  string
+	Score   int
+	Lamport int
+}
+
+type BidDecision struct {
+	Fire    FireID
+	Winner  string
+	Lamport int
+}
+
+type Tick struct {
+	Tick uint64
+	Seed int64
+}
+
+// RA messages
+type WaterReq struct {
+	From string
+	TS   int
+}
+type WaterReply struct{ From string }
+type WaterRelease struct{ From string }

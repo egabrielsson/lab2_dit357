@@ -1,20 +1,33 @@
 # Binaries
+distributed
+distributed-test
 main
-*.exe
-*.out
 
-# Go build artifacts
-*.o
-*.a
-*.so
+# Logs
+logs/*.log
 
-# IDE files
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS files
-.DS_Store
-Thumbs.db
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
