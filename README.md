@@ -1,9 +1,20 @@
-# Distributed Fire Truck System
+# Firetruck Simulation
 
-**Decentralized coordination** with Lamport timestamps and mutual exclusion.
+A distributed fire-fighting simulation system that demonstrates coordination, communication, and resource management between multiple firetrucks using the NATS messaging system and Lamport logical clocks for causal ordering.
 
-## Quick Start
+### Installation
 
+**Clone the repository**:
+   ```bash
+   git clone https://github.com/egabrielsson/lab2_dit357.git
+   cd lab2_dit357
+   ```
+
+**Install Go dependencies**:
+   ```bash
+   go mod tidy
+   ```
+**Run program:**
 ```bash
 # Build and run
 go build -o distributed cmd/distributed/main.go
@@ -15,29 +26,37 @@ go build -o distributed cmd/distributed/main.go
 ./logs.sh truck-t2    # Truck T2 activity
 ```
 
-## Assignment Compliance
+## Overview
 
-### Task 2: Lamport Timestamps & Mutual Exclusion
-- ✅ **Lamport timestamps** on all truck actions (move, bid, extinguish, refill)
-- ✅ **Mutual exclusion** for water supply using Lamport timestamps
-- ✅ **Fairness** demonstrated - requests processed by timestamp order
+This project simulates a distributed fire-fighting system where multiple firetrucks coordinate to extinguish fires on a grid. The system demonstrates:
 
-### Task 3: Decentralized Strategy & Naming
-- ✅ **Flat naming scheme** - trucks identified as T1, T2
-- ✅ **Decentralized coordination** - trucks bid on fires and evaluate bids collectively
-- ✅ **Robustness** - no single point of failure, handles message delays
-
-### Task 4: Demo & Presentation
-- ✅ **Concurrent trucks** - both T1 and T2 move simultaneously
-- ✅ **Real-time visualization** - fires spawn, spread, trucks respond
-- ✅ **Distributed consensus** - bidding and assignment without coordinator
+- **Distributed coordination** between autonomous agents (firetrucks)
+- **Publish-subscribe messaging** using NATS
+- **Causal ordering** with Lamport logical clocks
+- **Bidding protocols** for optimal fire assignment
+- **Real-time communication** between distributed nodes
 
 ## Architecture
 
-- **Fire Trucks (T1, T2)**: Generate fires, bid on alerts, extinguish fires
-- **Water Supply**: Shared resource with Lamport-based access control
-- **Observer**: Real-time grid visualization
-- **NATS**: Pub-sub messaging between all components
+**Components**
+
+**Each firetruck is an independent agent that contains:**
+- **A Lamport logical clock** for event ordering
+- **A transport layer** (NATS client) for communication
+- **Simulation logic** for movement, firefighting, and resource management
+- **Local state** (position, water level, current task)
+
+- **NATS Message Broker:** A central communication hub that manages:
+- **Multiple communication channels** (fires.alerts, trucks.status, water.requests...)
+- **Message routing** between firetrucks
+- **Publish-subscribe** pattern for broadcast messages
+
+## Prerequisites & Installation
+
+### Requirements
+- **Go 1.24.2** or later
+- **Docker** (for NATS server)
+- **Git** (for cloning the repository)
 
 ## Key Files
 

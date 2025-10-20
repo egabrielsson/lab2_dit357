@@ -19,19 +19,20 @@ type Firetruck struct {
 	MaxWater     int
 	Clock        *clock.LamportClock
 	Transport    transport.Transport
-	Task         string        // current task description
-	AssignedFire *FireLocation // current fire assignment (nil if none)
+	Task         string
+	AssignedFire *FireLocation
 
 	// Ricart-Agrawala state for water mutual exclusion
-	ra            raState
-	myReqTS       int
-	replies       map[string]bool
-	deferred      map[string]bool
-	peers         map[string]bool
+	ra             raState
+	myReqTS        int
+	replies        map[string]bool
+	deferred       map[string]bool
+	peers          map[string]bool
 	lowWaterThresh int
 }
 
 type raState int
+
 const (
 	raIdle raState = iota
 	raRequesting
@@ -45,7 +46,7 @@ func NewFiretruck(id string, r, c int) *Firetruck {
 		Row:            r,
 		Col:            c,
 		Water:          30, // Start with some water
-		MaxWater:       50,
+		MaxWater:       50, // Max volume of the truck
 		Clock:          clock.NewLamportClock(),
 		Task:           "idle",
 		ra:             raIdle,
@@ -57,7 +58,6 @@ func NewFiretruck(id string, r, c int) *Firetruck {
 }
 
 // GetStartingPosition returns the starting position for a truck based on its ID
-// This centralizes the spawn location logic used across simulation and NATS demo
 func GetStartingPosition(truckID string, gridSize int) (row, col int) {
 	switch truckID {
 	case "T1":
@@ -86,7 +86,7 @@ func (t *Firetruck) logf(format string, a ...interface{}) {
 	fmt.Println()
 }
 
-// MoveToward moves the firetruck one step toward the target coordinates
+// Moves the firetruck one step toward the target coordinates
 func (t *Firetruck) MoveToward(targetR, targetC int) {
 	oldRow, oldCol := t.Row, t.Col
 
@@ -303,7 +303,7 @@ func EvaluateFireBids(bids []FireBid) (winner string, reason string) {
 	return winner, reason
 }
 
-// Abs returns the absolute value of an integer (exported for use in other packages)
+// Abs returns the absolute value of an integer
 func Abs(x int) int {
 	if x < 0 {
 		return -x

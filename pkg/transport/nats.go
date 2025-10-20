@@ -44,7 +44,7 @@ func (nt *NATSTransport) GetID() string {
 	return nt.id
 }
 
-// SetClock sets the shared Lamport clock for this transport
+// SetClock sets the Lamport clock for this transport
 func (nt *NATSTransport) SetClock(clock *clock.LamportClock) {
 	nt.clock = clock
 }
@@ -74,12 +74,10 @@ func (nt *NATSTransport) Subscribe(channel string, handler SubscriptionHandler) 
 			return
 		}
 
-		// Process all messages including our own (required for decentralized coordination)
-
 		// Update Lamport clock
 		nt.clock.Receive(msg.Lamport)
 
-		// Call handler (no reply expected for broadcasts)
+		// Call handler
 		if err := handler(msg); err != nil {
 			fmt.Printf("Error handling broadcast message: %v\n", err)
 		}

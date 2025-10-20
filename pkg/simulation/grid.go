@@ -1,7 +1,7 @@
 package simulation
 
 import (
-	"fmt"
+	//"fmt"
 	"math/rand"
 	"time"
 )
@@ -13,7 +13,7 @@ func init() {
 
 const (
 	GridSize      = 20
-	FireChance    = 0.10 // Reasonable fire ignition rate
+	FireChance    = 0.03 // Reasonable fire ignition rate
 	SpreadChance  = 0.02 // Low spread rate for demonstration
 	GrowthPerTick = 1
 )
@@ -100,16 +100,16 @@ func (g *Grid) StepFires() []FireLocation {
 			case Fire:
 				newCells[r][c].Intensity += GrowthPerTick
 				if g.trySpread(newCells, r-1, c) {
-					newFires = append(newFires, FireLocation{Row: r-1, Col: c})
+					newFires = append(newFires, FireLocation{Row: r - 1, Col: c})
 				}
 				if g.trySpread(newCells, r+1, c) {
-					newFires = append(newFires, FireLocation{Row: r+1, Col: c})
+					newFires = append(newFires, FireLocation{Row: r + 1, Col: c})
 				}
 				if g.trySpread(newCells, r, c-1) {
-					newFires = append(newFires, FireLocation{Row: r, Col: c-1})
+					newFires = append(newFires, FireLocation{Row: r, Col: c - 1})
 				}
 				if g.trySpread(newCells, r, c+1) {
-					newFires = append(newFires, FireLocation{Row: r, Col: c+1})
+					newFires = append(newFires, FireLocation{Row: r, Col: c + 1})
 				}
 			case Extinguished:
 				// stays extinguished
@@ -143,7 +143,7 @@ func WaterCostForStep(intensity int) int {
 	if intensity > 10 {
 		intensity = 10
 	}
-	return 1 << intensity // 2^intensity
+	return 1 << intensity
 }
 
 // Extinguish applies up to `water` units to the cell at (r,c) using exponential cost.
@@ -193,29 +193,4 @@ func (g *Grid) FindAllFires() []FireLocation {
 		}
 	}
 	return fires
-}
-
-// Print shows a compact view: . empty, F fire, E extinguished, T truck
-func (g *Grid) Print(trucks []*Firetruck) {
-	overlay := make(map[[2]int]string)
-	for _, t := range trucks {
-		overlay[[2]int{t.Row, t.Col}] = "T"
-	}
-	for r := 0; r < GridSize; r++ {
-		for c := 0; c < GridSize; c++ {
-			if v, ok := overlay[[2]int{r, c}]; ok {
-				fmt.Print(v)
-				continue
-			}
-			switch g.cells[r][c].State {
-			case Empty:
-				fmt.Print(".")
-			case Fire:
-				fmt.Print("F")
-			case Extinguished:
-				fmt.Print("E")
-			}
-		}
-		fmt.Println()
-	}
 }

@@ -29,11 +29,11 @@ func main() {
 	}
 	defer t.Close()
 
-	fmt.Printf("\n╔═══════════════════════════════════════════════════╗\n")
-	fmt.Printf("║  DECENTRALIZED Fire Truck System                 ║\n")
-	fmt.Printf("║  Node: %-42s ║\n", *id)
-	fmt.Printf("║  Role: %-42s ║\n", *role)
-	fmt.Printf("╚═══════════════════════════════════════════════════╝\n\n")
+	// fmt.Printf("\n╔═══════════════════════════════════════════════════╗\n")
+	// fmt.Printf("║  DECENTRALIZED Fire Truck System                 ║\n")
+	// fmt.Printf("║  Node: %-42s ║\n", *id)
+	// fmt.Printf("║  Role: %-42s ║\n", *role)
+	// fmt.Printf("╚═══════════════════════════════════════════════════╝\n\n")
 
 	// Launch appropriate role
 	switch *role {
@@ -46,22 +46,23 @@ func main() {
 	}
 }
 
-// runFireTruck operates as an autonomous fire-fighting agent with DECENTRALIZED coordination
+// runFireTruck operates as an autonomous fire-fighting agent
 func runFireTruck(t *transport.NATSTransport, truckID string) {
 	// Initialize truck at starting position
 	row, col := simulation.GetStartingPosition(truckID, simulation.GridSize)
 	truck := simulation.NewFiretruck(truckID, row, col)
 	truck.SetTransport(t)
 
-	// Initialize Ricart-Agrawala for water mutual exclusion
+	// Initialize Ricart-Agrawala for water
 	truck.StartRA()
 
-	// SINGLE Lamport clock - shared between truck and transport
+	// Lamport clock that is shared between truck and transport
 	sharedClock := truck.Clock
 	t.SetClock(sharedClock)
 
+	// Initialize local grid simulation
 	grid := simulation.NewGrid()
-	
+
 	// Track if currently assigned to a fire
 	var assignedMu sync.Mutex
 	var currentAssignment *simulation.FireLocation
@@ -69,22 +70,22 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 	// Track last time we saw/announced a fire
 	var fireMu sync.Mutex
 	lastFireSeen := time.Now()
-	
-	// DECENTRALIZED: Bid collection and evaluation (moved from coordinator to each truck)
+
+	// Bid collection and evaluation
 	var mu sync.Mutex
 	bidsByFire := make(map[string][]message.Message)
 	timers := make(map[string]*time.Timer)
-	
+
 	log.Printf("Truck %s initialized at (%d,%d) with %d/%d water", truckID, row, col, truck.Water, truck.MaxWater)
-	
+
 	// Broadcast initial status
 	truck.BroadcastStatus()
 
 	// Subscribe to fire alerts and bid on fires
 	t.Subscribe(transport.ChannelFireAlerts, func(msg message.Message) error {
-		// Update SINGLE Lamport clock on message receive
+		// Update Lamport clock on message receive
 		sharedClock.Receive(msg.Lamport)
-		
+
 		// Check if already assigned
 		assignedMu.Lock()
 		if currentAssignment != nil {
@@ -92,8 +93,9 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 			return nil
 		}
 		assignedMu.Unlock()
-		
+
 		// Handle both old FireAlert and new FireAnnounce formats
+
 		var fireRow, fireCol, intensity int
 		if row, ok := msg.Payload["row"].(float64); ok {
 			// Old format
@@ -106,9 +108,9 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 			fireCol = int(msg.Payload["id_y"].(float64))
 			intensity = int(msg.Payload["intensity"].(float64))
 		}
-		
+
 		log.Printf("Truck %s: Fire alert received at (%d,%d), intensity %d", truckID, fireRow, fireCol, intensity)
-		
+
 		// Update local grid view
 		grid.SetCell(fireRow, fireCol, simulation.Cell{
 			State:     simulation.Fire,
@@ -119,11 +121,12 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 		fireMu.Lock()
 		lastFireSeen = time.Now()
 		fireMu.Unlock()
-		
+
 		// Bid if we have sufficient water to respond
 		if truck.GetWater() >= intensity {
 			distance := simulation.Abs(truck.Row-fireRow) + simulation.Abs(truck.Col-fireCol)
-			score := distance // Lower score = better (closer)
+			// Lower score equals lower distance to fire
+			score := distance
 
 			// Broadcast bid using new typed message
 			lamportTs := sharedClock.Tick()
@@ -135,28 +138,28 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 			}
 
 			bidMsg := message.Message{
-				Type: message.TypeBid,
-				From: truckID,
+				Type:    message.TypeBid,
+				From:    truckID,
 				Lamport: lamportTs,
 				Payload: map[string]interface{}{
-					"fire_x": float64(fireRow),
-					"fire_y": float64(fireCol),
-					"bidder": bid.Bidder,
-					"score": float64(bid.Score),
+					"fire_x":  float64(fireRow),
+					"fire_y":  float64(fireCol),
+					"bidder":  bid.Bidder,
+					"score":   float64(bid.Score),
 					"lamport": float64(bid.Lamport),
 				},
 			}
 			t.Publish(transport.ChannelFireBids, bidMsg)
 			log.Printf("Truck %s: bid fire=(%d,%d) score=%d ts=%d", truckID, fireRow, fireCol, score, bid.Lamport)
 
-			// DECENTRALIZED: Add own bid to local collection
+			// Add own bid to local collection
 			fireKey := fmt.Sprintf("%v,%v", fireRow, fireCol)
 			mu.Lock()
 			bidsByFire[fireKey] = append(bidsByFire[fireKey], bidMsg)
 
 			// Start timer if not already running for this fire
 			if timers[fireKey] == nil {
-				timers[fireKey] = time.AfterFunc(3*time.Second, func() {
+				timers[fireKey] = time.AfterFunc(1*time.Second, func() {
 					mu.Lock()
 					bids := bidsByFire[fireKey]
 					delete(bidsByFire, fireKey)
@@ -167,25 +170,24 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 						return
 					}
 
-					// DECENTRALIZED EVALUATION
 					evaluateAndAnnounceDecentralized(t, truck, truckID, bids, sharedClock)
 				})
 			}
 			mu.Unlock()
 		} else {
-		log.Printf("Truck %s: Low water (%d), requesting refill via RA", truckID, truck.GetWater())
-		truck.RequestWaterRA()
+			log.Printf("Truck %s: Low water (%d), requesting refill via RA", truckID, truck.GetWater())
+			truck.RequestWaterRA()
 		}
-		
+
 		return nil
 	})
 
-	// DECENTRALIZED: Collect bids from other trucks
+	// Collect bids from other trucks
 	t.Subscribe(transport.ChannelFireBids, func(msg message.Message) error {
-		// Update SINGLE Lamport clock on message receive
+		// Update Lamport clock on message receive
 		sharedClock.Receive(msg.Lamport)
 
-		// Handle new bid format
+		// Handle bid
 		fireX := int(msg.Payload["fire_x"].(float64))
 		fireY := int(msg.Payload["fire_y"].(float64))
 		fireKey := fmt.Sprintf("%v,%v", fireX, fireY)
@@ -199,7 +201,7 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 
 	// Subscribe to bid decisions
 	t.Subscribe(transport.ChannelFireDecision, func(msg message.Message) error {
-		// Update SINGLE Lamport clock on message receive
+		// Update Lamport clock on message receive
 		sharedClock.Receive(msg.Lamport)
 
 		winner := msg.Payload["winner"].(string)
@@ -224,12 +226,12 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 
 		return nil
 	})
-	
+
 	// Subscribe to extinguish events to update local grid
 	t.Subscribe(transport.ChannelCoordination, func(msg message.Message) error {
-		// Update SINGLE Lamport clock on message receive
+		// Update Lamport clock on message receive
 		sharedClock.Receive(msg.Lamport)
-		
+
 		if action, ok := msg.Payload["action"].(string); ok && action == "extinguished" {
 			row := int(msg.Payload["target_row"].(float64))
 			col := int(msg.Payload["target_col"].(float64))
@@ -237,9 +239,8 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 		}
 		return nil
 	})
-	
 
-	// DECENTRALIZED fire generation: any truck may announce fires periodically
+	// Any truck may announce fires periodically
 	go func() {
 		randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
 		ticker := time.NewTicker(12 * time.Second)
@@ -249,23 +250,23 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 			fireMu.Lock()
 			silent := time.Since(lastFireSeen) > 20*time.Second
 			fireMu.Unlock()
-			
+
 			activeFires := len(grid.FindAllFires())
-			
-			// Generate fires when: few fires exist OR long silence
-			shouldGenerate := (activeFires < 2 && randSrc.Float32() < 0.4) || 
-							 (silent && randSrc.Float32() < 0.5)
-			
+
+			// Generate fires when few fires exist OR long silence
+			shouldGenerate := (activeFires < 2 && randSrc.Float32() < 0.4) ||
+				(silent && randSrc.Float32() < 0.5)
+
 			if shouldGenerate && activeFires < 5 {
 				row := randSrc.Intn(simulation.GridSize)
 				col := randSrc.Intn(simulation.GridSize)
-				
+
 				// Check if cell already has fire
 				if grid.GetCell(row, col).State == simulation.Fire {
 					continue
 				}
-				
-				// EXPONENTIAL fire intensity (not linear)
+
+				// fire intensity increases exponentially
 				intensity := 2 + randSrc.Intn(3) // intensity 2-4
 				msg := message.NewMessage(
 					message.TypeFireAlert,
@@ -282,7 +283,6 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 		}
 	}()
 
-
 	// Periodic status broadcast to ensure trucks are always visible
 	go func() {
 		statusTicker := time.NewTicker(2 * time.Second)
@@ -291,11 +291,11 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 			truck.BroadcastStatus()
 		}
 	}()
-
-	select {} // Keep running
+	// Keep running
+	select {}
 }
 
-// evaluateAndAnnounceDecentralized processes collected bids and announces winner (DECENTRALIZED)
+// Processes collected bids and announces winner
 func evaluateAndAnnounceDecentralized(t *transport.NATSTransport, truck *simulation.Firetruck, truckID string, bids []message.Message, clock *clock.LamportClock) {
 	if len(bids) == 0 {
 		return
@@ -334,8 +334,7 @@ func evaluateAndAnnounceDecentralized(t *transport.NATSTransport, truck *simulat
 	reason := "lowest score"
 	log.Printf("Truck %s: Winner=%s (%s)", truckID, winner, reason)
 
-	// DECENTRALIZED ANNOUNCER ELECTION
-	// Find lowest truck ID among all bidders (prevents duplicate announcements)
+	// Find lowest truck ID among all bidders
 	announcer := winner
 	for _, b := range typedBids {
 		if b.Bidder < announcer {
@@ -343,16 +342,16 @@ func evaluateAndAnnounceDecentralized(t *transport.NATSTransport, truck *simulat
 		}
 	}
 
-	// Only the lowest truck ID announces (prevents duplicate announcements)
+	// Only the lowest truck ID announces to prevent duplicates
 	if truckID == announcer {
 		decision := message.Message{
-			Type: message.TypeBidDecision,
-			From: truckID,
+			Type:    message.TypeBidDecision,
+			From:    truckID,
 			Lamport: clock.Tick(),
 			Payload: map[string]interface{}{
-				"fire_x": fireX,
-				"fire_y": fireY,
-				"winner": winner,
+				"fire_x":  fireX,
+				"fire_y":  fireY,
+				"winner":  winner,
 				"lamport": clock.Now(),
 			},
 		}
@@ -363,23 +362,23 @@ func evaluateAndAnnounceDecentralized(t *transport.NATSTransport, truck *simulat
 	}
 }
 
-// handleFireAssignment moves truck to fire and extinguishes it
-func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruck, 
+// Moves truck to fire and extinguishes it
+func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruck,
 	grid *simulation.Grid, fire *simulation.FireLocation, assignedMu *sync.Mutex, currentAssignment **simulation.FireLocation, clock *clock.LamportClock) {
-	
+
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		row, col := truck.GetPosition()
-		
+
 		// Check if at fire location
 		if row == fire.Row && col == fire.Col {
 			cell := grid.GetCell(row, col)
 			if cell.State == simulation.Fire && truck.GetWater() > 0 {
 				used := grid.Extinguish(row, col, truck.GetWater())
 				truck.Water -= used
-				
+
 				log.Printf("\nFIRE EXTINGUISHED SUCCESSFULLY")
 				log.Printf("   Location: (%d,%d)", row, col)
 				log.Printf("   Water used: %d units", used)
@@ -387,7 +386,7 @@ func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruc
 				log.Printf("   Extinguished by: Truck %s", truck.ID)
 				log.Printf("   Lamport timestamp: %d", clock.Tick())
 				log.Printf("   Broadcasting extinguish event to all trucks...")
-				
+
 				// Broadcast extinguish event
 				msg := message.NewMessage(
 					message.TypeCoordination,
@@ -402,24 +401,24 @@ func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruc
 			} else if cell.State != simulation.Fire {
 				log.Printf("[%s] DECENTRALIZED: Fire at (%d,%d) already extinguished", truck.ID, row, col)
 			}
-			
+
 			// Clear assignment
 			assignedMu.Lock()
 			*currentAssignment = nil
 			assignedMu.Unlock()
-			
+
 			// Request water refill if below threshold
 			if truck.GetWater() <= truck.GetLowWaterThresh() {
 				truck.RequestWaterRA()
 			}
 			return
 		}
-		
+
 		// Move toward fire
 		oldRow, oldCol := truck.GetPosition()
 		truck.MoveToward(fire.Row, fire.Col)
 		newRow, newCol := truck.GetPosition()
-		
+
 		// Broadcast position update if moved
 		if oldRow != newRow || oldCol != newCol {
 			log.Printf("\nTRUCK MOVEMENT")
@@ -433,14 +432,11 @@ func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruc
 	}
 }
 
-
-
-
-// runObserver monitors and visualizes the system state
+// Monitors and visualizes the system state
 func runObserver(t *transport.NATSTransport, observerID string) {
 	grid := simulation.NewGrid()
 	trucks := make(map[string]*simulation.Firetruck)
-	
+
 	log.Printf("\n==================================================================================")
 	log.Printf("OBSERVER - SYSTEM MONITOR")
 	log.Printf("==================================================================================")
@@ -450,7 +446,7 @@ func runObserver(t *transport.NATSTransport, observerID string) {
 	log.Printf("Visualizing: Decentralized coordination in real-time")
 	log.Printf("Lamport clocks: Synchronized across all processes")
 	log.Printf("==================================================================================\n")
-	
+
 	// Subscribe to all events
 	t.Subscribe(transport.ChannelFireAlerts, func(msg message.Message) error {
 		// Handle both old and new fire alert formats
@@ -475,14 +471,14 @@ func runObserver(t *transport.NATSTransport, observerID string) {
 		fmt.Printf("\nNEW FIRE DETECTED: (%d,%d) | Intensity: %d | Lamport: %d\n", row, col, intensity, msg.Lamport)
 		return nil
 	})
-	
+
 	t.Subscribe(transport.ChannelTruckStatus, func(msg message.Message) error {
 		truckID := msg.From
 		row := int(msg.Payload["row"].(float64))
 		col := int(msg.Payload["col"].(float64))
 		water := int(msg.Payload["water"].(float64))
 		maxWater := int(msg.Payload["max_water"].(float64))
-		
+
 		if trucks[truckID] == nil {
 			trucks[truckID] = simulation.NewFiretruck(truckID, row, col)
 		}
@@ -490,69 +486,67 @@ func runObserver(t *transport.NATSTransport, observerID string) {
 		trucks[truckID].Col = col
 		trucks[truckID].Water = water
 		trucks[truckID].MaxWater = maxWater
-		
+
 		return nil
 	})
 
-	
 	t.Subscribe(transport.ChannelCoordination, func(msg message.Message) error {
 		if action, ok := msg.Payload["action"].(string); ok && action == "extinguished" {
 			row := int(msg.Payload["target_row"].(float64))
 			col := int(msg.Payload["target_col"].(float64))
-			
+
 			grid.SetCell(row, col, simulation.Cell{State: simulation.Extinguished})
 			fmt.Printf("\nFIRE EXTINGUISHED: (%d,%d) | By: Truck %s | Lamport: %d\n", row, col, msg.From, msg.Lamport)
 		}
 		return nil
 	})
-	
-	// CONSISTENT WORLD STATE: Observer advances fire simulation and publishes alerts
+
+	// Observer advances fire simulation and publishes alerts
 	go func() {
 		growthTicker := time.NewTicker(5 * time.Second)
 		defer growthTicker.Stop()
 		for range growthTicker.C {
 			newFires := grid.StepFires()
-			// World stepping completed
 
 			// Publish alerts for newly spread fires
 			for _, fire := range newFires {
 				cell := grid.GetCell(fire.Row, fire.Col)
 				alert := message.Message{
-					Type: message.TypeFireAnnounce,
-					From: observerID,
+					Type:    message.TypeFireAnnounce,
+					From:    observerID,
 					Lamport: 1, // Observer timestamp
 					Payload: map[string]interface{}{
-						"id_x":       float64(fire.Row),
-						"id_y":       float64(fire.Col),
-						"intensity":  float64(cell.Intensity),
-						"tick":       float64(0),
+						"id_x":      float64(fire.Row),
+						"id_y":      float64(fire.Col),
+						"intensity": float64(cell.Intensity),
+						"tick":      float64(0),
 					},
 				}
 				t.Publish(transport.ChannelFireAlerts, alert)
 			}
 		}
 	}()
-	
-	// Periodic status display (1 Hz)
+
+	// Periodic status display
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		fmt.Println("\n" + "═══════════════════════════════════════════════════")
 		printSystemState(grid, trucks)
 	}
 }
 
-// printSystemState displays current grid and truck status
+// Displays current grid and truck status
 func printSystemState(grid *simulation.Grid, trucks map[string]*simulation.Firetruck) {
 	fmt.Println("GRID STATE:")
-	
+
 	// Create truck position map
 	truckPos := make(map[[2]int]string)
 	for id, t := range trucks {
 		truckPos[[2]int{t.Row, t.Col}] = id
 	}
-	
+
 	// Print grid
 	for r := 0; r < simulation.GridSize; r++ {
 		for c := 0; c < simulation.GridSize; c++ {
@@ -566,22 +560,21 @@ func printSystemState(grid *simulation.Grid, trucks map[string]*simulation.Firet
 				case simulation.Fire:
 					fmt.Print("  F")
 				case simulation.Extinguished:
-					fmt.Print("  X")
+					fmt.Print("  E")
 				}
 			}
 		}
 		fmt.Println()
 	}
-	
+
 	// Print truck and water supply info
 	fmt.Println("\nTRUCK STATUS:")
 	for id, t := range trucks {
 		fmt.Printf("  %s: position=(%d,%d) water=%d/%d\n",
 			id, t.Row, t.Col, t.Water, t.MaxWater)
 	}
-	
+
 	// Fire count
 	fires := grid.FindAllFires()
 	fmt.Printf("\nActive fires: %d\n", len(fires))
 }
-
