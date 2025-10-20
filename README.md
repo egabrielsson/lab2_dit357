@@ -38,6 +38,8 @@ This project simulates a distributed fire-fighting system where multiple firetru
 
 ## Architecture
 
+A decentralized distributed system
+
 **Components**
 
 **Each firetruck is an independent agent that contains:**
