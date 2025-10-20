@@ -30,8 +30,8 @@ echo "Starting water supply..."
 WATER_PID=$!
 sleep 1
 
-# Start trucks (DECENTRALIZED - NO COORDINATOR!)
-echo "Starting fire trucks (DECENTRALIZED)..."
+# Start trucks
+echo "Starting fire trucks ..."
 ./distributed -id=T1 -role=truck > logs/truck-t1.log 2>&1 &
 T1_PID=$!
 sleep 0.5
@@ -47,7 +47,7 @@ OBS_PID=$!
 
 echo ""
 echo "╔═══════════════════════════════════════════════════╗"
-echo "║  System Started Successfully!                   ║"
+echo "║  System Started Successfully!                     ║"
 echo "╚═══════════════════════════════════════════════════╝"
 echo ""
 echo "Process IDs:"

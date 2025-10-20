@@ -30,7 +30,7 @@ func main() {
 	defer t.Close()
 
 	// fmt.Printf("\n╔═══════════════════════════════════════════════════╗\n")
-	// fmt.Printf("║  DECENTRALIZED Fire Truck System                 ║\n")
+	// fmt.Printf("║  Fire Truck System                                  ║\n")
 	// fmt.Printf("║  Node: %-42s ║\n", *id)
 	// fmt.Printf("║  Role: %-42s ║\n", *role)
 	// fmt.Printf("╚═══════════════════════════════════════════════════╝\n\n")
@@ -170,7 +170,7 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 						return
 					}
 
-					evaluateAndAnnounceDecentralized(t, truck, truckID, bids, sharedClock)
+					evaluateAndAnnounce(t, truck, truckID, bids, sharedClock)
 				})
 			}
 			mu.Unlock()
@@ -296,7 +296,7 @@ func runFireTruck(t *transport.NATSTransport, truckID string) {
 }
 
 // Processes collected bids and announces winner
-func evaluateAndAnnounceDecentralized(t *transport.NATSTransport, truck *simulation.Firetruck, truckID string, bids []message.Message, clock *clock.LamportClock) {
+func evaluateAndAnnounce(t *transport.NATSTransport, truck *simulation.Firetruck, truckID string, bids []message.Message, clock *clock.LamportClock) {
 	if len(bids) == 0 {
 		return
 	}
@@ -399,7 +399,7 @@ func handleFireAssignment(t *transport.NATSTransport, truck *simulation.Firetruc
 				t.Publish(transport.ChannelCoordination, msg)
 				truck.BroadcastStatus()
 			} else if cell.State != simulation.Fire {
-				log.Printf("[%s] DECENTRALIZED: Fire at (%d,%d) already extinguished", truck.ID, row, col)
+				log.Printf("[%s] Fire at (%d,%d) already extinguished", truck.ID, row, col)
 			}
 
 			// Clear assignment
@@ -443,7 +443,7 @@ func runObserver(t *transport.NATSTransport, observerID string) {
 	log.Printf("Role: Passive observer of distributed system")
 	log.Printf("Monitoring: Fire generation, truck movement, extinguishing")
 	log.Printf("Tracking: Water supply and refill operations")
-	log.Printf("Visualizing: Decentralized coordination in real-time")
+	log.Printf("Visualizing: coordination in real-time")
 	log.Printf("Lamport clocks: Synchronized across all processes")
 	log.Printf("==================================================================================\n")
 
